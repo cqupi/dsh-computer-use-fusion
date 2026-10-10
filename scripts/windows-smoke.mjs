@@ -47,7 +47,7 @@ try {
     const typed = await repl.execute(`await app.click('FusionEditor'); await app.pressKey('ctrl+a'); await app.typeText('Keyboard Unicode 验证');`, context);
     assert.equal(typed.ok, true, JSON.stringify(typed));
     const readback = await core.observe({ target: old.target, screenshot: false }, context);
-    assert.equal(readback.elements.find(e => e.label === 'FusionEditor')?.value, 'Keyboard Unicode 验证');
+    assert.equal(readback.elements.find(e => e.label === 'FusionEditor')?.value, 'Keyboard Unicode 验证', JSON.stringify(typed));
   }
   console.log('PASS: native capture/mapping, semantic Unicode readback, password input, reusable observations after UI changes, persistent JS multi-action loop and local foreground keyboard input.');
 } finally { await repl.dispose(); await core.dispose(); fixture.kill(); }

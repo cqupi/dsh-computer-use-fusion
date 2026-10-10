@@ -12,7 +12,7 @@ await app.typeText('hello'); await app.paste('hello'); await app.pressKey('ctrl+
 await app.setValue(12, 'hello'); await app.invoke(12); await app.activate();
 await app.scroll(12, 'down', 3); await app.scroll([x,y], 'down', {pixels:360});
 await app.drag([x1,y1], [x2,y2]); await app.ocr();
-Bindings persist between fusion_computer calls. Operations activate the bound window by default.
+Bindings persist between fusion_computer calls in this conversation. Operations activate the bound window by default.
 Coordinates refer to the last returned image. Missing mapping is captured automatically.
 Batch awaited actions, then getAXState()/getScreenshot() to inspect the result.
 No plugin approval, one-use observation ID, TTL, allowlist, password block or stop marker.

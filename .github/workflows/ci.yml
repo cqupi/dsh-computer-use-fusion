@@ -33,6 +33,7 @@ jobs:
         with:
           node-version: '24'
       - run: node scripts/build-macos.mjs
+      - run: node scripts/macos-helper-smoke.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: fusion-macos-helper

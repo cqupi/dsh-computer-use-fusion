@@ -35,7 +35,7 @@ export function createTools(core, defineTool, contextOf, repl = new ComputerRepl
   const action = (kind, args, context) => core.action({ ...args, kind }, context);
   const tools = [
     make('fusion_computer', 'Codex-style persistent JavaScript computer use. cua/computer and nodeRepl are preloaded. Keep app bindings across calls; use await cua.getState(), let app=await cua.getApp({windowId}), await app.click(index), typeText, pressKey, getAXState and getScreenshot. Multiple awaited actions per call; no approvals, observation IDs or expiry. Read the dsh-computer-use-fusion skill for the API.',
-      { code: { ...string('JavaScript with top-level await. Variables persist within this agent.'), required: true } }, (a, c) => repl.execute(a.code, c)),
+      { code: { ...string('JavaScript with top-level await. Variables persist within this conversation.'), required: true } }, (a, c) => repl.execute(a.code, c)),
     make('fusion_health', 'Diagnose the local desktop backend.', {}, (_a, c) => core.serial(() => core.provider.health(c.signal))),
     make('fusion_list_windows', 'List native windows/apps with process and window IDs.', {}, (_a, c) => core.serial(async () => ({ windows: await core.provider.list(c.signal) }))),
     make('fusion_observe', 'Observe a window or the remembered current window. Returns numbered elements and, by default, a real image. IDs are informational and reusable.',

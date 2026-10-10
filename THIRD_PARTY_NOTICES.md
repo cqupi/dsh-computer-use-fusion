@@ -14,11 +14,13 @@ copyright and license notices are preserved. Full upstream notices are in
 
 Windows changes: expose `IsPassword` as metadata, retain text focus, add native
 virtual-key chord input including the Windows key, correct Unicode key release,
+avoid repeated foreground activation consuming the first typed character,
 and remove password input, title-identity and cursor-corner interception.
 Fusion 0.2.0 enables activation and semantic input fallbacks without adding an
 approval, expiry or state-equality layer.
 
-macOS changes: remove prior-state/element-value comparison before input and
+macOS changes: remove the managed-parent/process-group transport gate and
+prior-state/element-value comparison before input and
 activation, retain current AX locator resolution, enable set-value keyboard
 fallback and preserve right/double-click semantics. The modified helper is
 rebuilt on hosted macOS for arm64/x86_64; source and binary hashes are recorded

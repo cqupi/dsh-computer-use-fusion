@@ -80,85 +80,6 @@ private func dictionaries(_ object: Any?) -> [[String: Any]] {
     object as? [[String: Any]] ?? []
 }
 
-private enum TransportEndpoint: Hashable {
-    case pipe(handle: UInt64, peer: UInt64)
-    case unixSocket(handle: UInt64, peer: UInt64)
-}
-
-private func processDescriptors(_ pid: Int32) -> [proc_fdinfo] {
-    let capacity = Int(max(proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nil, 0), 0))
-    guard capacity >= MemoryLayout<proc_fdinfo>.size else { return [] }
-    var descriptors = Array(repeating: proc_fdinfo(), count: capacity / MemoryLayout<proc_fdinfo>.size)
-    let bytes = descriptors.withUnsafeMutableBytes { buffer in
-        proc_pidinfo(pid, PROC_PIDLISTFDS, 0, buffer.baseAddress, Int32(buffer.count))
-    }
-    guard bytes > 0 else { return [] }
-    return Array(descriptors.prefix(Int(bytes) / MemoryLayout<proc_fdinfo>.size))
-}
-
-private func transportEndpoint(_ pid: Int32, _ fd: Int32) -> TransportEndpoint? {
-    var pipe = pipe_fdinfo()
-    let pipeSize = MemoryLayout<pipe_fdinfo>.size
-    if proc_pidfdinfo(pid, fd, PROC_PIDFDPIPEINFO, &pipe, Int32(pipeSize)) == pipeSize {
-        return .pipe(handle: pipe.pipeinfo.pipe_handle, peer: pipe.pipeinfo.pipe_peerhandle)
-    }
-
-    var socket = socket_fdinfo()
-    let socketSize = MemoryLayout<socket_fdinfo>.size
-    guard proc_pidfdinfo(pid, fd, PROC_PIDFDSOCKETINFO, &socket, Int32(socketSize)) == socketSize,
-          socket.psi.soi_family == AF_UNIX,
-          socket.psi.soi_type == SOCK_STREAM,
-          socket.psi.soi_kind == SOCKINFO_UN else { return nil }
-    return .unixSocket(
-        handle: socket.psi.soi_so,
-        peer: socket.psi.soi_proto.pri_un.unsi_conn_so
-    )
-}
-
-private func transportEndpointsMatch(_ child: TransportEndpoint, _ parent: TransportEndpoint) -> Bool {
-    switch (child, parent) {
-    case let (.pipe(childHandle, childPeer), .pipe(parentHandle, parentPeer)),
-         let (.unixSocket(childHandle, childPeer), .unixSocket(parentHandle, parentPeer)):
-        return childPeer != 0
-            && childHandle == parentPeer
-            && childPeer == parentHandle
-    default:
-        return false
-    }
-}
-
-private func disconnectedUnixSocket(_ endpoint: TransportEndpoint) -> Bool {
-    if case let .unixSocket(_, peer) = endpoint { return peer == 0 }
-    return false
-}
-
-private func parentOwnsStandardTransport() -> Bool {
-    let childEndpoints = [STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO].compactMap { fd in
-        transportEndpoint(getpid(), fd).map { (fd, $0) }
-    }
-    guard childEndpoints.count == 3,
-          Set(childEndpoints.map(\.1)).count == 3 else { return false }
-
-    let parentEndpoints = processDescriptors(getppid()).compactMap { descriptor in
-        transportEndpoint(getppid(), descriptor.proc_fd)
-    }
-    return childEndpoints.allSatisfy { fd, child in
-        let matches = parentEndpoints.filter { transportEndpointsMatch(child, $0) }
-        if matches.count == 1 { return true }
-        // The batch stdin writer may close its parent endpoint before the helper
-        // reaches main. Node represents that standard stream as a disconnected
-        // Unix socket, while stdout and stderr remain provably parent-owned.
-        return fd == STDIN_FILENO && matches.isEmpty && disconnectedUnixSocket(child)
-    }
-}
-
-private func requireHostTransport() throws {
-    guard getpgrp() == getpid(),
-          parentOwnsStandardTransport() else {
-        throw fail("COMPUTER_ACTION_BLOCKED", "native helper requires managed parent transport; use the registered Computer Use Tools")
-    }
-}
-
 private func permissionAccessibility() -> String {
     AXIsProcessTrusted() ? "granted" : "denied"
 }
@@ -1150,7 +1071,6 @@ private struct HelperMain {
         do {
             _ = NSApplication.shared
             NSApplication.shared.setActivationPolicy(.prohibited)
-            try requireHostTransport()
             if ProcessInfo.processInfo.arguments.contains("--cursor-overlay") {
                 CursorOverlayRuntime.run()
                 return

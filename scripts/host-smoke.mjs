@@ -54,6 +54,9 @@ const js = await ctx.tools.execute({ name: 'fusion_computer', arguments: { code:
 assert.equal(js.isError, false, JSON.stringify(js));
 assert.equal(js.value.ok, true, JSON.stringify(js));
 assert.equal(js.content.filter(block => block.type === 'image').length, 1);
+const continued = await ctx.tools.execute({ name: 'fusion_computer', arguments: { code: 'await app.getAXState();' }, agent: { ...agent, session: { ...agent.session } },
+  callId: 'repl-next-turn', signal: AbortSignal.timeout(10000) });
+assert.equal(continued.value.ok, true, 'A new Agent object in the same conversation retains JavaScript bindings');
 await installed.dispose();
 assert.equal(ctx.tools.schemas().length, 0, 'Actual plugin unload unregisters all tools');
 assert.equal(plugin.name, 'dsh-computer-use-fusion');

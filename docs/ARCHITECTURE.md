@@ -1,6 +1,6 @@
 # Architecture — 0.2.0
 
-`fusion_computer` owns one persistent Node worker per DSH agent. Node's built-in
+`fusion_computer` owns one persistent Node worker per DSH conversation. Node's built-in
 REPL supplies top-level await and persistent lexical bindings. Worker calls to
 `cua`/`computer` and bound app objects cross an RPC bridge to the main host.
 `nodeRepl.write` returns additional output; nested screenshots become real DSH

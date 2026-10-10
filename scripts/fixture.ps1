@@ -16,6 +16,14 @@ $edit.AccessibleName = 'FusionEditor'
 $edit.Location = New-Object System.Drawing.Point(20, 20)
 $edit.Width = 440
 $form.Controls.Add($edit)
+# Give the fixture an explicit application shortcut, then verify delivery
+# through the resulting selection/replacement rather than assuming EDIT defaults.
+$edit.Add_KeyDown({ param($sender, $eventArgs)
+  if ($eventArgs.Control -and $eventArgs.KeyCode -eq [System.Windows.Forms.Keys]::A) {
+    $edit.SelectAll()
+    $eventArgs.SuppressKeyPress = $true
+  }
+})
 $label = New-Object System.Windows.Forms.Label
 $label.Text = 'Status: waiting'
 $label.AccessibleName = 'FusionStatus'
@@ -35,5 +43,17 @@ $password.AccessibleName = 'FusionPassword'
 $password.Location = New-Object System.Drawing.Point(20, 150)
 $password.Add_TextChanged({ $label.Text = "Password length: $($password.Text.Length)"; $label.AccessibleName = $label.Text })
 $form.Controls.Add($password)
+$keyTrace = New-Object System.Windows.Forms.Label
+$keyTrace.Text = 'Key trace: waiting'
+$keyTrace.AccessibleName = $keyTrace.Text
+$keyTrace.Location = New-Object System.Drawing.Point(20, 200)
+$keyTrace.Width = 600
+$form.Controls.Add($keyTrace)
+$edit.Add_KeyUp({ param($sender, $eventArgs)
+  if ($eventArgs.KeyCode -eq [System.Windows.Forms.Keys]::A) {
+    $keyTrace.Text = "Key trace: A control=$($eventArgs.Control) selected=$($edit.SelectionLength)"
+    $keyTrace.AccessibleName = $keyTrace.Text
+  }
+})
 $form.Add_Shown({ [Console]::WriteLine((@{ pid=$PID; hwnd=[int64]$form.Handle } | ConvertTo-Json -Compress)); [Console]::Out.Flush() })
 [System.Windows.Forms.Application]::Run($form)

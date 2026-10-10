@@ -30,6 +30,8 @@ node scripts/host-smoke.mjs .compat/alpha
 - Hosted macOS rebuild of the modified Swift helper for arm64 and x86_64,
   followed by ad-hoc signing and generated source/binary manifest. The rebuilt
   helper and manifest are retained as a CI artifact for release packaging.
+  A native health call through the real Node provider verifies executable startup
+  without the former managed-parent/process-group gate; it needs no GUI permission.
 
 ## Installation and previous validation
 

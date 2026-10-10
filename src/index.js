@@ -25,7 +25,8 @@ export const skill = { name: 'dsh-computer-use-fusion', source: 'runtime', conte
 export function executionContext(exec, ctx, identities = new WeakMap()) {
   const agent = exec?.agent;
   if (agent && !identities.has(agent)) identities.set(agent, `agent:${identitiesCounter++}`);
-  return { owner: agent ? identities.get(agent) : 'default', callId: exec?.callId, signal: exec?.signal, agent,
+  const sessionId = agent?.session?.id ?? agent?.session?.header?.sessionId ?? exec?.sessionId;
+  return { owner: sessionId != null ? `session:${sessionId}` : agent ? identities.get(agent) : 'default', callId: exec?.callId, signal: exec?.signal, agent,
     attachments: ctx.get?.('attachments') };
 }
 let identitiesCounter = 0;

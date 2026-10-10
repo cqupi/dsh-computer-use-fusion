@@ -498,6 +498,9 @@ function Set-WindowForeground {
   # the current foreground window's thread and tapping the Alt key releases
   # the lock long enough to switch (classic AutoHotkey trick).
   $fgPtr = [WindowsComputerUseNative]::GetForegroundWindow()
+  if ($fgPtr -eq $ptr) { return $true }
+  [void][WindowsComputerUseNative]::SetForegroundWindow($ptr)
+  if ([WindowsComputerUseNative]::GetForegroundWindow() -eq $ptr) { return $true }
   $fgThread = [uint32]0
   $tgtThread = [uint32]0
   [void][WindowsComputerUseNative]::GetWindowThreadProcessId($fgPtr, [ref]$fgThread)
@@ -586,6 +589,7 @@ function Focus-TextControl {
   # control type name when focus was set, else $null.
   param([System.Windows.Automation.AutomationElement]$Window)
   $el = Invoke-Safe { [System.Windows.Automation.AutomationElement]::FocusedElement } $null
+  if ($null -ne $el -and (Invoke-Safe { $el.Current.ProcessId -eq $Window.Current.ProcessId } $false)) { return (Get-ControlTypeName $el.Current.ControlType) }
   if ($null -eq $el -or -not (Invoke-Safe { $el.Current.ProcessId -eq $Window.Current.ProcessId } $false)) {
     $el = Get-BestTextControl $Window
   }
@@ -2005,7 +2009,7 @@ function Invoke-Action {
       Assert-TargetIsForeground $inputObject
       $keyCodes = Convert-KeyCodes -Keys $keys
       if (-not [WindowsComputerUseNative]::SendVirtualKeyChord($keyCodes)) { throw "Windows input queue rejected key events." }
-      return ([ordered]@{ ok = $true; action = "keypress"; keys = $keys; method = "sendinput-keychord" })
+      return ([ordered]@{ ok = $true; action = "keypress"; keys = $keys; virtualKeys = $keyCodes; method = "sendinput-keychord" })
     }
     "focus" {
       $elementId = [string](Get-Prop $inputObject "elementId" "")

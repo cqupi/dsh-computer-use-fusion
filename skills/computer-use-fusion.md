@@ -1,43 +1,64 @@
 # Computer Use Fusion
 
-Prefer purpose-built connectors, APIs, CLIs, and browser automation. Use this
-plugin for native desktop UI that those interfaces cannot handle.
+Prefer `fusion_computer` for desktop work. It is a persistent JavaScript tool:
+send code with top-level await; keep app bindings and variables between calls.
+`cua`, its alias `computer`, and `nodeRepl` are already available.
 
-1. Call fusion_health, then fusion_list_windows. Choose an exact process/window.
-   On macOS prefer bundleId plus pid. A missing or ambiguous target is an error.
-2. Call fusion_observe. Read the UIA/AX elements first; request screenshot=true
-   for a visual task or coordinate actions. It captures the selected window.
-3. Use an observation-local element or handle whenever possible. Every input
-   requires the exact observationId and consumes it. Use the new observation
-   returned by the action, or observe again. Never borrow another agent's ID.
-4. Coordinate x/y and drag endpoints are pixels in the image the tool returned.
-   mapping.origin and mapping.screenPerPixel describe its transform. Do not
-   multiply them yourself: the plugin does the conversion exactly once.
-   A tree-only post-observation has no image; observe with screenshot=true
-   before the next coordinate action. OCR boxes use screen coordinates; use
-   (screen - mapping.origin) / mapping.screenPerPixel to derive image pixels.
-5. Default to semantic/background actions. Windows foreground=true activates
-   the selected window and may move the user's real cursor. Never claim that
-   native Windows foreground input uses an isolated cursor. Key, scroll and
-   drag require explicit foreground=true on Windows. Background PostMessage
-   can be ignored by applications: read fresh evidence and report uncertainty.
-   Do not automatically retry in foreground after a refusal.
-6. Read the actual effect and post-observation. A successful input dispatch
-   does not prove task completion. occludedPossible means the screenshot may
-   show another window. Observe after UI changes; changed-state errors require
-   a new observation, never blind replay. Pixel-only changes may evade AX/UIA.
-7. Set sensitive=true and explain the impact in reason before payments,
-   purchases, account/security changes, consequential communications, destructive
-   operations, or publication. The host asks for one-use confirmation tied to
-   that proposed action. Keyword detection is an extra heuristic, not a full
-   policy. A denied approval is final for this turn. Do not bypass it.
-8. Password fields cannot receive automated text or chords. Let the human enter
-   credentials. Screenshots may contain private content; narrow the target.
-   Image feedback sends the captured window to the configured model provider.
-9. Use fusion_stop immediately when the user asks to stop. Only the human can
-   resume with node scripts/doctor.mjs --resume. Never remove the stop marker
-   through shell tools to continue an agent workflow.
+```javascript
+await cua.getState();
+let app = await cua.getApp({windowId: 123});
+await app.getAXState();
+```
 
-The packaged Windows and macOS providers are native. backend=cua uses an
-independently installed cua-driver and its isolated virtual cursor. Linux/CUA
-and native macOS require platform validation; consult docs/VALIDATION.md.
+`getState` lists apps/windows. `listWindows` and `listApps` return each inventory.
+`getApp` accepts `{windowId}`, `{pid}`, `{bundleId}`, a window/app title string,
+or no selector for the active app. It automatically displays the initial tree.
+
+## App methods
+
+```javascript
+await app.getAXState();
+await app.getScreenshot();
+await app.getAXStateAndScreenshot();
+await app.click(12);
+await app.click('Accessible name');
+await app.click([200, 150], {mouseButton: 'right', clickCount: 1});
+await app.typeText('Hello');
+await app.paste('Hello');
+await app.pressKey('ctrl+a');
+await app.setValue(12, 'Hello');
+await app.invoke(12);
+await app.activate();
+await app.scroll(12, 'down', 3);
+await app.scroll([200, 150], 'down', {pixels: 360});
+await app.scroll(undefined, 'down', 3);
+await app.drag([100, 100], [300, 200]);
+await app.ocr();
+nodeRepl.write({anything: 'to inspect'});
+```
+
+States and images display automatically. `paste` aliases Unicode typing; it does
+not require clipboard access. Windows uses a real pointer for coordinate input.
+The optional cua-driver backend supplies a virtual cursor. This facade operates
+native apps; use the browser's own tools for browser tabs.
+
+Batch awaited actions in one call, then retrieve state or a screenshot to see
+what happened. App objects remain usable across turns. Screenshot coordinates
+are in the most recent returned image's pixels, including host resizing; no
+manual screen scaling. A tree-only refresh preserves the last image mapping.
+Refresh the image after a window resize. Missing image mapping is captured
+automatically. No observation ID is required.
+
+The plugin has no custom approval, dangerous-word check, password-input block,
+app allowlist, observation expiry, state-equality preflight or stop/resume file.
+Actions activate the bound window automatically. OS errors are reported as-is.
+The DSH host's own policy is separate from this plugin.
+
+JavaScript errors return completed outputs and an error; previous bindings can
+usually be reused. Await native calls so their results/errors belong to this
+execution. Host cancellation or a JS timeout terminates the worker and resets
+bindings; the next call starts fresh, with no manual resume step.
+
+Direct `fusion_*` tools remain available. `fusion_observe` defaults to images;
+actions remember its window and return new state/images. Use `observeAfter:false`
+for batching. Legacy observation IDs are optional and reusable.
