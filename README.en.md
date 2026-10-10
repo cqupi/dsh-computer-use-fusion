@@ -1,5 +1,19 @@
 # DSH Computer Use Fusion
 
+Download the ready-to-install `.tgz` from [Releases](https://github.com/cqupi/dsh-computer-use-fusion/releases/latest).
+In DSH Desktop, open **Plugins → Add plugin**, enter the asset URL or the absolute
+local `.tgz` path, install, then enable it. Do not extract the archive. Uninstall an
+existing Desktop version before reinstalling. The package includes the Windows
+backend and the compiled macOS universal helper; no checkout or build is required.
+
+```powershell
+dsh plugin --profile web add "https://github.com/cqupi/dsh-computer-use-fusion/releases/download/v0.2.0/cqupi-dsh-computer-use-fusion-0.2.0.tgz"
+```
+
+Maintainers: `npm run package` writes the installable archive, `SHA256SUMS`, and
+Chinese installation instructions to `dist/`. CI also uploads these files as
+the `dsh-installable-plugin` artifact after checking the installed package.
+
 [中文](README.md) · [Validation](docs/VALIDATION.md) · [Attribution](THIRD_PARTY_NOTICES.md)
 
 Version **0.2.0** adds a persistent JavaScript native-app API similar to Codex

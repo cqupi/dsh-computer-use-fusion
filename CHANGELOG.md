@@ -1,5 +1,9 @@
 # Changelog
 
+Release packaging: `npm run package` generates an installable `.tgz`, checksum
+and Chinese instructions. CI checks the installed archive and saves the package
+artifact; GitHub Releases provide the ready-to-install plugin download.
+
 ## 0.2.0 — 2026-10-10
 
 - Added `fusion_computer`: persistent JavaScript with top-level await, `cua` /

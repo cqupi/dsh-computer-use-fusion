@@ -7,4 +7,5 @@ upstream/
 .env*
 !.env.example
 coverage/
+dist/
 native/macos/build/

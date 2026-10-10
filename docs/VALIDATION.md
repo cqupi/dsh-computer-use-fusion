@@ -37,6 +37,21 @@ node scripts/host-smoke.mjs .compat/alpha
 
 ## Installation and previous validation
 
+The 0.2.0 release tarball was installed with the real DSH CLI into fresh isolated
+Web and Headless profiles. Both composed the bundle patch and passed all 14 tool
+lifecycle/dispatch checks against the installed copy, including persistent JS
+and real image output. Installed native helpers and JavaScript entry points were
+compared byte-for-byte with the packaged inputs. Headless config/schema loading
+also passed. The Web `--dump-config-schema` command reports four Loader-carrier
+errors in DSH's own template; a fresh Web profile without Fusion reproduces the
+same errors. Web installation and composed config loading passed.
+
+`npm run package` runs the prepack checks, verifies required runtime payloads and
+produces a DSH-installable `.tgz`, `SHA256SUMS` and Chinese install instructions.
+CI installs the packed copy and repeats the host smoke checks before uploading
+the `dsh-installable-plugin` artifact. GitHub Releases distribute the installable
+tarball separately from GitHub's automatic source archives.
+
 The 0.1.0 baseline was installed through the real DSH CLI into isolated Web and
 Headless profiles. A public Git install into another Headless profile succeeded,
 and composed config/schema included the plugin. Shared SDK peers are supplied by

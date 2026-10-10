@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { Context } from '@deepseek-ai/cordis';
-import { createTools } from '../src/tools.js';
-import plugin, { apply, skill } from '../src/index.js';
+
+// A second argument runs the same lifecycle/dispatch checks against an installed tarball.
+const pluginRoot = resolve(process.argv[3] || fileURLToPath(new URL('..', import.meta.url)));
+const { createTools } = await import(pathToFileURL(resolve(pluginRoot, 'src/tools.js')).href);
+const { default: plugin, apply, skill } = await import(pathToFileURL(resolve(pluginRoot, 'src/index.js')).href);
 
 // Optional directory lets the exact published alpha SDK be tested in isolation.
 const requireHost = createRequire(resolve(process.argv[2] || '.', 'package.json'));
@@ -21,7 +24,7 @@ const target = { pid: 42, id: 5, name: 'Contract fixture', appId: 'fixture' };
 fakeProvider.resolve = async () => target;
 fakeProvider.observe = async (_target, screenshot) => ({ target, elements: [], frame: { x: 20, y: 30, width: 2, height: 2 },
   screenshot: screenshot ? { data: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64'), bounds: { x: 20, y: 30, width: 2, height: 2 } } : undefined });
-const { FusionCore } = await import('../src/core.js');
+const { FusionCore } = await import(pathToFileURL(resolve(pluginRoot, 'src/core.js')).href);
 const core = new FusionCore(fakeProvider);
 const tools = createTools(core, sdk.defineTool, () => ({ owner: 'test', signal: AbortSignal.timeout(5000) }));
 const releases = tools.map(tool => ctx.tools.register(tool));

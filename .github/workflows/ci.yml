@@ -25,6 +25,20 @@ jobs:
       - run: node scripts/host-smoke.mjs .compat/host
       - if: runner.os == 'Windows' && matrix.dsh == '0.2.0-rc.2'
         run: npm run test:windows
+      - if: runner.os == 'Linux' && matrix.dsh == '0.2.0-rc.2'
+        run: |
+          npm run package
+          npm install --prefix .compat/packed --ignore-scripts --legacy-peer-deps ./dist/*.tgz
+          node scripts/host-smoke.mjs . .compat/packed/node_modules/@cqupi/dsh-computer-use-fusion
+      - if: runner.os == 'Linux' && matrix.dsh == '0.2.0-rc.2'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-installable-plugin
+          path: |
+            dist/*.tgz
+            dist/SHA256SUMS
+            dist/INSTALL.zh-CN.md
+          if-no-files-found: error
   macos-source:
     runs-on: macos-latest
     steps:

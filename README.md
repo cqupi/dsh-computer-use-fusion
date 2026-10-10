@@ -52,6 +52,33 @@ Windows 角落急停和 Windows 键禁用也已移除，前台输入自动处理
 建议 Node.js **24+**，最低 **22.19**。适配 DSH **0.2.0-rc.2**；
 **0.2.1-alpha.2** 已通过宿主接口验证。
 
+### 直接安装打包插件（推荐）
+
+在 [Releases](https://github.com/cqupi/dsh-computer-use-fusion/releases/latest)
+下载 `cqupi-dsh-computer-use-fusion-0.2.0.tgz`，保持 `.tgz` 格式，无需解压或编译。
+包内包含运行代码、Windows 后端、已经编译的 macOS universal helper、技能与 bundle patch。
+
+DSH 桌面版：打开「插件」→「添加插件」，填入下载链接或本地 `.tgz` 的绝对路径，
+安装完成后点击「立即启用」。例如：
+
+```text
+Z:\vibeproject\dsh-computer-use-fusion\dist\cqupi-dsh-computer-use-fusion-0.2.0.tgz
+```
+
+如果桌面版已经安装旧版，请先卸载插件再安装新版。CLI 可以直接安装发布包：
+
+```powershell
+dsh plugin --profile web add "https://github.com/cqupi/dsh-computer-use-fusion/releases/download/v0.2.0/cqupi-dsh-computer-use-fusion-0.2.0.tgz"
+# 本地包：
+dsh plugin --profile web add "Z:\vibeproject\dsh-computer-use-fusion\dist\cqupi-dsh-computer-use-fusion-0.2.0.tgz"
+```
+
+安装器自动解析运行依赖；此包不需要 Git checkout 或本地构建。Release 同时提供
+`SHA256SUMS` 和中文安装说明。以后每次 CI 都会生成可安装包，维护者也可运行
+`npm run package` 在 `dist/` 生成同样的三个文件。
+
+### 从 Git 安装或开发
+
 ```powershell
 dsh plugin --profile web add git+https://github.com/cqupi/dsh-computer-use-fusion.git
 # Headless:
