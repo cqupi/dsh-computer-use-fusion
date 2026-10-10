@@ -35,6 +35,10 @@ export async function attachScreenshot(shot, { attachments, imageCapable = false
     path = join(await mkdtemp(join(tmpdir(), 'dsh-fusion-image-')), 'window.png');
     await writeFile(path, data);
   }
+  if (!path) {
+    path = join(await mkdtemp(join(tmpdir(), 'dsh-fusion-image-')), 'window.png');
+    await writeFile(path, data);
+  }
   let map = mapping(shot.bounds, size.width, size.height);
   const base = { screenshot: { path, width: size.width, height: size.height,
     method: shot.method, occludedPossible: shot.occludedPossible }, mapping: map };

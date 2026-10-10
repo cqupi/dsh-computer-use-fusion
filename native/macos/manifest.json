@@ -4,7 +4,7 @@
   "sourceSha256": "31197383dd2ae9dfdb6856017a4142113fe2a62871aa6ac71ab254ea76e0bda2",
   "binary": {
     "path": "bin/dsh-computer-use-helper",
-    "sha256": "4e1d2d7394f122721c999d82a894876138e7fdd1e068ffb438a53b66bde98741",
+    "sha256": "94af572e427fd8aa6e7744a1bd5711409d209c0af0d0f80d907c6f1264b074b6",
     "architectures": [
       "arm64",
       "x86_64"

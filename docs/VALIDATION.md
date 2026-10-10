@@ -32,6 +32,8 @@ node scripts/host-smoke.mjs .compat/alpha
   helper and manifest are retained as a CI artifact for release packaging.
   A native health call through the real Node provider verifies executable startup
   without the former managed-parent/process-group gate; it needs no GUI permission.
+  The published universal helper was retrieved from that build and its artifact
+  digest, Swift source hash and binary hash were checked before packaging.
 
 ## Installation and previous validation
 
@@ -42,7 +44,9 @@ DSH's installation resolver; pnpm can report missing profile-local peers without
 preventing DSH schema loading. User profiles and model credentials were not modified.
 
 [Initial 0.1.0 CI](https://github.com/cqupi/dsh-computer-use-fusion/actions/runs/38029512724)
-passed all seven jobs. Current validation runs are available under
+passed all seven jobs. [0.2.0 source and macOS helper validation](https://github.com/cqupi/dsh-computer-use-fusion/actions/runs/38035891581)
+also passed all seven jobs, including both DSH versions on all three operating
+systems and native macOS helper startup. Current validation runs are available under
 [Actions](https://github.com/cqupi/dsh-computer-use-fusion/actions).
 
 ## Scope not established
