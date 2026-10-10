@@ -1,0 +1,103 @@
+{
+  "name": "@cqupi/dsh-computer-use-fusion",
+  "version": "0.1.0",
+  "description": "Unified DSH computer use: native Windows UIA and macOS AX, optional cua-driver, scoped fresh observations and exact vision coordinates.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./core": "./src/core.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "native",
+    "vendor",
+    "licenses",
+    "skills",
+    "scripts/doctor.mjs",
+    "scripts/build-macos.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "docs",
+    "SECURITY.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "test:windows": "node scripts/windows-smoke.mjs",
+    "test:host": "node scripts/host-smoke.mjs",
+    "prepack": "npm run check && npm test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "node": "^22.19.0 || >=24.0.0",
+      "dsh": "0.2.0-rc.2 || 0.2.1-alpha.2",
+      "profiles": [
+        "web",
+        "headless"
+      ]
+    },
+    "permissions": {
+      "summary": "Read selected desktop windows, capture screenshots, and perform scoped UI actions through bundled Windows UIA/macOS AX or an explicitly configured cua-driver. Windows foreground input may move the real cursor. Screenshots are sent only through the configured DSH model route when image feedback is enabled.",
+      "commands": [
+        "powershell.exe (fixed packaged script)",
+        "native/macos/bin/dsh-computer-use-helper",
+        "optional cua-driver"
+      ],
+      "writePaths": [
+        "OS temporary screenshot files"
+      ],
+      "externalServices": "No direct network calls; optional screenshot attachments use the host model provider.",
+      "failureBoundaries": "Missing backend, stale or cross-session observation, changed state, denied scope or approval, and user stop fail closed."
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "0.2.0-rc.2 || 0.2.1-alpha.2",
+    "@deepseek-ai/schemastery": "^3.18.4"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh-settings": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-skill": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-user-approval": "0.2.0-rc.2",
+    "@deepseek-ai/schemastery": "3.18.4",
+    "yaml": "^2.8.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cqupi/dsh-computer-use-fusion.git"
+  },
+  "homepage": "https://github.com/cqupi/dsh-computer-use-fusion#readme",
+  "bugs": {
+    "url": "https://github.com/cqupi/dsh-computer-use-fusion/issues"
+  },
+  "author": "cqupi and upstream contributors",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "computer-use",
+    "windows",
+    "macos",
+    "uia",
+    "accessibility",
+    "vision"
+  ],
+  "dependencies": {
+    "sharp": "0.35.5"
+  }
+}

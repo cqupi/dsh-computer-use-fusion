@@ -1,0 +1,10 @@
+- insert:
+    - id: computer-use-fusion
+      name: '@cqupi/dsh-computer-use-fusion'
+      config:
+        backend: auto
+        ttlMs: 30000
+        maxNodes: 250
+        vision: true
+        visionMaxPixels: 640000
+        requireControlApproval: true

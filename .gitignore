@@ -1,0 +1,10 @@
+node_modules/
+upstream/
+.compat/
+.artifacts/
+*.tgz
+*.log
+.env*
+!.env.example
+coverage/
+native/macos/build/
