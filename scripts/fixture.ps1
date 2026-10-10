@@ -33,6 +33,7 @@ $password = New-Object System.Windows.Forms.TextBox
 $password.UseSystemPasswordChar = $true
 $password.AccessibleName = 'FusionPassword'
 $password.Location = New-Object System.Drawing.Point(20, 150)
+$password.Add_TextChanged({ $label.Text = "Password length: $($password.Text.Length)"; $label.AccessibleName = $label.Text })
 $form.Controls.Add($password)
 $form.Add_Shown({ [Console]::WriteLine((@{ pid=$PID; hwnd=[int64]$form.Handle } | ConvertTo-Json -Compress)); [Console]::Out.Flush() })
 [System.Windows.Forms.Application]::Run($form)

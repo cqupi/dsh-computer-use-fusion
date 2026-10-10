@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 — 2026-10-10
+
+- Added `fusion_computer`: persistent JavaScript with top-level await, `cua` /
+  `computer`, bound app objects, numbered trees and real image output.
+- Added `fusion_screenshot`; direct tools remember their window and no longer
+  require an observation ID. Default activation and post-action images.
+- Removed plugin approvals, label confirmations, app allowlists, password input
+  blocks, observation TTL/consumption/ownership gates, state-equality checks,
+  stop/resume files, cursor-corner stop and Windows-key restriction.
+- Enabled semantic fallbacks; Windows keyboard chords use native SendInput.
+- Modified the macOS helper to resolve live element locators without state
+  comparison; supplied a universal source build/artifact workflow.
+- JS workers return failed-await output promptly and reset automatically after
+  host cancellation. Added functional REPL and unrestricted interaction tests.
+
 ## 0.1.0 — 2026-10-10
 
 - Unified 13 namespaced DSH tools over native Windows UIA, pinned native macOS AX,

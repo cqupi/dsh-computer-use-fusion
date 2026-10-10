@@ -28,8 +28,8 @@ export class CuaProvider {
     const candidates = windows.filter(w => (!selector.pid || w.pid === selector.pid)
       && (!selector.windowId || String(w.window_id) === String(selector.windowId))
       && (!selector.name || `${w.title} ${w.app_name}`.toLowerCase().includes(selector.name.toLowerCase())));
-    if (candidates.length !== 1) throw new Error('CUA_SELECT_EXACT_WINDOW: supply windowId from fusion_list_windows');
-    const w = candidates[0];
+    const w = candidates.find(item => item.focused || item.active || item.is_frontmost) ?? candidates[0];
+    if (!w) throw new Error('WINDOW_NOT_FOUND');
     return { id: w.window_id, pid: w.pid, name: w.app_name, appId: w.bundle_id || `pid:${w.pid}` };
   }
   async observe(target, screenshot, signal) {
@@ -46,7 +46,7 @@ export class CuaProvider {
   }
   act(target, action, element, signal) {
     const args = { pid: target.pid, window_id: target.id, ...(element ? { element_token: element.ref } : action.point),
-      delivery_mode: action.foreground ? 'foreground' : 'background' };
+      delivery_mode: action.foreground !== false ? 'foreground' : 'background' };
     switch (action.kind) {
       case 'click': return this.call(action.count === 2 ? 'double_click' : action.button === 'right' ? 'right_click' : 'click', args, signal);
       case 'type': return this.call('type_text', { ...args, text: action.text }, signal);

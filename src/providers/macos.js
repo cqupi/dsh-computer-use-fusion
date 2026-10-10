@@ -25,7 +25,12 @@ export class MacOSProvider {
   health(signal) { return this.call({ command: 'health' }, signal); }
   list(signal) { return this.call({ command: 'list-apps' }, signal); }
   async resolve(selector = {}, signal) {
-    if (!selector.bundleId && !selector.pid && !selector.name) throw new Error('MACOS_SELECT_EXACT_APP: supply bundleId or pid');
+    if (!selector.bundleId && !selector.pid && !selector.name) {
+      const apps = await this.list(signal);
+      const active = apps.find(app => app.frontmost) ?? apps[0];
+      if (!active) throw new Error('APP_NOT_FOUND');
+      selector = { pid: active.pid, bundleId: active.bundleId };
+    }
     const app = await this.call({ command: 'resolve-app', selector }, signal);
     return { ...app, appId: app.bundleId };
   }
@@ -40,6 +45,9 @@ export class MacOSProvider {
       screenshot: raw.screenshot ? { ...raw.screenshot, bounds: raw.window.frame, method: 'native-window' } : undefined };
   }
   async act(target, action, element, signal, observed) {
+    if (action.kind === 'activate') return this.call({ command: 'activate-for-cursor', app: target,
+      options: { maxNodes: this.config.maxNodes ?? 250, maxDepth: 12, maxTextBytes: 64000 },
+      actionTimeoutMs: this.config.timeoutMs ?? 30000 }, signal);
     const point = action.point ?? {};
     const base = { coordinateSpace: 'screen', ...point };
     const nativeAction = {
@@ -47,15 +55,17 @@ export class MacOSProvider {
       type: { kind: 'type-text', text: action.text },
       key: { kind: 'press-key', key: action.keys?.at(-1), modifiers: action.keys?.slice(0, -1) },
       set_value: { kind: 'set-value', value: action.text },
-      invoke: { kind: 'perform-action', action: element?.actions?.[0] },
+      invoke: element?.actions?.length ? { kind: 'perform-action', action: element.actions[0] }
+        : { kind: 'click', button: 'left', clickCount: 1, allowCoordinateFallback: true },
       scroll: { ...base, kind: 'scroll', direction: action.direction, pages: action.amount ?? 1 },
       drag: { kind: 'drag', coordinateSpace: 'screen', fromX: point.x, fromY: point.y, toX: action.to?.x, toY: action.to?.y },
     }[action.kind];
     if (!nativeAction) throw new Error('UNSUPPORTED_ACTION_ON_MACOS');
     return this.call({ command: 'act', request: { app: target, action: nativeAction,
-      expectedStateHash: observed.stateHash, element: element?.native,
+      element: element?.native,
       window: { id: target.id, frame: observed.frame }, actionTimeoutMs: this.config.timeoutMs ?? 30000,
-      interaction: { focusPolicy: action.foreground ? 'activate' : 'preserve', keyboardPolicy: action.foreground ? 'activate' : 'preserve', pointerInputPolicy: 'targeted' },
+      interaction: { focusPolicy: action.foreground !== false ? 'activate' : 'preserve', keyboardPolicy: action.foreground !== false ? 'activate' : 'preserve', pointerInputPolicy: 'targeted',
+        cursorSpeedPxPerSecond: 3000, cursorAccelerationPxPerSecondSquared: 20000 },
       limits: { maxNodes: this.config.maxNodes ?? 250, maxDepth: 12, maxTextBytes: 64000 } } }, signal);
   }
   dispose() {}

@@ -1,7 +1,7 @@
 {
   "name": "@cqupi/dsh-computer-use-fusion",
-  "version": "0.1.0",
-  "description": "Unified DSH computer use: native Windows UIA and macOS AX, optional cua-driver, scoped fresh observations and exact vision coordinates.",
+  "version": "0.2.0",
+  "description": "Codex-style persistent JavaScript computer use for DSH: native Windows UIA/macOS AX, real screenshots and optional cua-driver.",
   "type": "module",
   "main": "src/index.js",
   "exports": {
@@ -51,7 +51,7 @@
       ]
     },
     "permissions": {
-      "summary": "Read selected desktop windows, capture screenshots, and perform scoped UI actions through bundled Windows UIA/macOS AX or an explicitly configured cua-driver. Windows foreground input may move the real cursor. Screenshots are sent only through the configured DSH model route when image feedback is enabled.",
+      "summary": "Desktop observation and input through persistent JavaScript app bindings or direct tools. Automatic activation; Windows coordinate input uses the real mouse. No plugin approval, action-label filter, app allowlist, password block, observation expiry or stop marker.",
       "commands": [
         "powershell.exe (fixed packaged script)",
         "native/macos/bin/dsh-computer-use-helper",
@@ -61,7 +61,7 @@
         "OS temporary screenshot files"
       ],
       "externalServices": "No direct network calls; optional screenshot attachments use the host model provider.",
-      "failureBoundaries": "Missing backend, stale or cross-session observation, changed state, denied scope or approval, and user stop fail closed."
+      "failureBoundaries": "OS permissions, unavailable targets, rejected native input, unsupported operations, invalid parameters and host cancellation are reported as execution errors."
     }
   },
   "peerDependencies": {
@@ -73,7 +73,6 @@
     "@deepseek-ai/dsh-settings": "0.2.0-rc.2",
     "@deepseek-ai/dsh-skill": "0.2.0-rc.2",
     "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-user-approval": "0.2.0-rc.2",
     "@deepseek-ai/schemastery": "3.18.4",
     "yaml": "^2.8.1"
   },

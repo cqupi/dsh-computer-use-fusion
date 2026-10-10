@@ -1,53 +1,57 @@
 # DSH Computer Use Fusion
 
-[中文说明](README.md) · [Validation](docs/VALIDATION.md) · [Attribution](THIRD_PARTY_NOTICES.md)
+[中文](README.md) · [Validation](docs/VALIDATION.md) · [Attribution](THIRD_PARTY_NOTICES.md)
 
-One independent MIT plugin combining native Windows UIA, native macOS AX,
-optional cua-driver, and image feedback with exact image-to-backend mapping.
-Initial release: 0.1.0. Not affiliated with DeepSeek or upstream maintainers.
+Version **0.2.0** adds a persistent JavaScript native-app API similar to Codex
+Computer Use, with UIA/AX element targeting and real screenshot attachments.
+MIT licensed; independent of OpenAI, DeepSeek and the upstream projects.
 
 ```text
 dsh plugin --profile web add git+https://github.com/cqupi/dsh-computer-use-fusion.git
 ```
 
-Requires Node 22.19+ or 24+, DSH 0.2.0-rc.2. Host contract tests also cover
-0.2.1-alpha.2. Restart the host, start a new session, load
-`/dsh-computer-use-fusion`, and use `fusion_health`, `fusion_list_windows`, then
-`fusion_observe` with an exact target. This repository is not yet published to npm.
+Use Node 24+ (minimum 22.19), DSH 0.2.0-rc.2. Host contracts also cover
+0.2.1-alpha.2. Restart DSH and load `/dsh-computer-use-fusion`.
 
-13 namespaced tools share caller-bound, one-use observations, TTL, application
-scope checks, per-turn control approval, sensitive-action approval, and
-pre-input structural revalidation. Password input is blocked. Each successful
-input returns a new observation or an explicit post-observation warning.
+Call `fusion_computer` with JavaScript in its `code` parameter:
 
-Coordinates use the returned image pixels. The attachment service's final image
-dimensions are included in `mapping.screenPerPixel`. Tree-only observations
-carry no image mapping: request a screenshot before another coordinate action.
-
-Windows foreground mouse input moves the real cursor and activates the target.
-Only the optional, separately installed cua-driver provides its isolated cursor.
-Native macOS uses Anionex's pinned, integrity-checked universal helper.
-macOS and Linux/CUA have not had native end-to-end testing on this Windows host.
-Background PostMessage delivery is not guaranteed; UI state is evidence, not
-proof of remote or pixel-only effects. Consult the Chinese README for the full
-platform matrix, settings, tool list, privacy behavior and current limitations.
-
-```text
-npm ci
-npm run check
-npm test
-npm run test:host
-npm run test:windows
-node scripts/doctor.mjs
-node scripts/doctor.mjs --stop
-node scripts/doctor.mjs --resume
+```javascript
+await cua.getState();
+let app = await cua.getApp({windowId: 123});
+await app.getAXState();
 ```
 
-Image feedback sends the selected window to the configured DSH model provider
-only when image input is declared and attachments are available. The plugin has
-no direct network client, key fallback or telemetry. Screenshots use temporary
-files. Only a human should remove a stop marker and resume.
+Bindings persist between calls:
 
-All four upstream projects, pinned commits, MIT notices and modifications are
-listed in THIRD_PARTY_NOTICES.md. Contributions should include observable
-outcomes from a dedicated fixture and must not use the user's working apps.
+```javascript
+await app.click(12);
+await app.typeText('Hello');
+await app.pressKey('ctrl+a');
+await app.getAXStateAndScreenshot();
+```
+
+`computer` aliases `cua`. Also available: `getScreenshot`, `paste`, `setValue`,
+`invoke`, `activate`, `scroll`, `drag`, `ocr`, `nodeRepl.write`, and 13 direct
+`fusion_*` tools. Coordinate clicks use pixels in the last returned image.
+Actions activate the selected window automatically. Observe after a batch to
+inspect its effect. The native-app facade does not implement browser tabs or
+Codex internals.
+
+Removed from 0.1.0: plugin approvals, dangerous-label confirmation, app allowlist,
+password input blocks, caller ownership checks, observation TTL, one-use IDs,
+state-equality preflights, persistent stop/resume markers, cursor-corner stop,
+and the Windows key block. Only the DSH tools service is required. Host policy
+and operating-system permissions remain controlled by their respective systems.
+
+Windows uses the real cursor and bundled persistent PowerShell UIA. macOS uses
+a modified, rebuilt universal AX helper. `backend:cua` uses a separately
+installed cua-driver and its virtual cursor. Native macOS GUI and actual
+cua-driver sessions have not been verified here.
+
+The JavaScript worker supports top-level await and persistent variables. Host
+cancellation terminates it; the next call creates a new session. It is not a
+security sandbox. Screenshots pass through the host attachment/model route;
+there is no separate model API key or control HTTP server.
+
+Run `node scripts/validate.mjs`. See the full Chinese README for the API table,
+configuration, source attribution and validation scope.

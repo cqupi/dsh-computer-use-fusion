@@ -2,144 +2,143 @@
 
 [English](README.en.md) · [验证记录](docs/VALIDATION.md) · [来源与许可证](THIRD_PARTY_NOTICES.md)
 
-把四个社区项目中互补的能力整合成一个 DeepSeek Harness 插件：原生 Windows
-UIA、macOS Accessibility、可选 cua-driver，以及带准确坐标映射的视觉截图。
-统一提供 13 个 `fusion_*` 工具，采用 MIT 许可证。当前版本为 **0.1.0 初始版本**。
+为 DeepSeek Harness 提供接近 Codex Computer Use 的原生桌面交互：持久 JavaScript、
+保存窗口对象、编号元素、真实图片附件，以及连续的观察和操作。**0.2.0** 使用 MIT 许可证。
 
-这是独立整合项目，与 DeepSeek 及原作者没有官方关联。
+```javascript
+// 在 fusion_computer 工具的 code 参数中执行；支持顶层 await。
+await cua.getState();
+let app = await cua.getApp({ windowId: 12345 });
+await app.getAXState();
+```
 
-## 整合了什么
+后续调用直接复用 `app`：
 
-| 来源 | 融合方式 |
+```javascript
+await app.click(12);
+await app.typeText('你好');
+await app.pressKey('ctrl+a');
+await app.getAXStateAndScreenshot();
+```
+
+`cua` 与 `computer` 是同一对象。窗口绑定和变量跨工具调用保留，可以在一次调用内
+执行多个 `await` 操作。操作默认自动激活目标；状态和截图直接显示在工具结果里。
+这是独立实现的 Codex 风格原生应用 API，与 OpenAI、DeepSeek 和上游作者没有官方关联。
+不包含 Codex 私有内核，也不提供浏览器 tab API。
+
+## 0.2.0 的交互变化
+
+删除 0.1.0 的插件审批、危险词确认、应用白名单、密码输入拦截、30 秒过期、一次性 ID、
+调用者归属检查、动作前状态一致性检查，以及停止文件和恢复流程。
+Windows 角落急停和 Windows 键禁用也已移除，前台输入自动处理激活。
+旧的 `ttlMs`、`allowedApps`、`requireControlApproval` 配置不再参与执行。
+
+插件仅依赖 DSH `tools` 服务，不需要 `approval` 服务。DSH 宿主及模型本身的行为由宿主管理。
+系统权限、窗口不存在、输入被系统拒绝、无效参数等情况仍会返回实际错误。
+
+## 四个项目各取所长
+
+| 来源 | 融合内容 |
 | --- | --- |
-| Anionex/dsh-computer-use | 保留 Swift 原生 macOS helper 与源码；借鉴观测 ID、句柄、状态校验与权限分层。 |
-| 988hj7tczd-oss/dsh-computer-use | 复用 cua-driver 定位与会话恢复代码；作为可选驱动，提供独立虚拟光标路径。 |
-| Yu-tao-Li/dsh-computer-use-win | 集成持久化 PowerShell UIA 后端、后台语义操作、原生窗口捕获与本地 OCR。 |
-| xie129716/computer-user-vision | 融合真实图片附件、像素预算、宿主缩放后的坐标映射，并避开已移除的 settings API。 |
+| [Anionex/dsh-computer-use](https://github.com/Anionex/dsh-computer-use) | Swift 原生 macOS AX、窗口捕获和定向输入；Fusion 修改 helper，取消状态一致性拦截并重新构建 universal binary。 |
+| [988hj7tczd-oss/dsh-computer-use](https://github.com/988hj7tczd-oss/dsh-computer-use) | 可选 cua-driver 虚拟光标路径、驱动定位与会话恢复。 |
+| [Yu-tao-Li/dsh-computer-use-win](https://github.com/Yu-tao-Li/dsh-computer-use-win) | 持久 PowerShell UIA、语义操作、窗口捕获和本地 OCR；补充自动前台输入与完整按键事件。 |
+| [xie129716/computer-user-vision](https://github.com/xie129716/computer-user-vision) | 模型可见的真实图片附件、像素预算、准确坐标映射，以及看图操作的交互方式。 |
 
-没有直接拼装四套同名工具，也没有复制原项目的 API key fallback、LLM adapter
-包装器或控制 HTTP 路由。来源版本、版权与修改说明见 THIRD_PARTY_NOTICES.md。
+完整版权、固定来源版本和修改说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-## 安装
+## 安装与升级
 
-要求 Node.js **22.19+ 或 24+**，DSH **0.2.0-rc.2**。
-`0.2.1-alpha.2` 已通过宿主接口测试；完整验证范围见验证记录。
+建议 Node.js **24+**，最低 **22.19**。适配 DSH **0.2.0-rc.2**；
+**0.2.1-alpha.2** 已通过宿主接口验证。
+
+```powershell
+dsh plugin --profile web add git+https://github.com/cqupi/dsh-computer-use-fusion.git
+# Headless:
+dsh plugin --profile headless add git+https://github.com/cqupi/dsh-computer-use-fusion.git
+```
+
+从 Git 安装的旧版，重新执行上面的 `add` 命令更新，并重启 DSH。
+创建新会话，加载 `/dsh-computer-use-fusion`，让模型优先使用 `fusion_computer`。
+当前没有发布 npm 包。
+
+本地开发：
 
 ```powershell
 git clone https://github.com/cqupi/dsh-computer-use-fusion.git
 cd dsh-computer-use-fusion
 npm ci
-npm run check
-npm test
 node scripts/doctor.mjs
 dsh plugin --profile web add .
 ```
 
-也可从 Git 安装（尚未发布 npm 包）：
+## 持久 JavaScript API
 
-```text
-dsh plugin --profile web add git+https://github.com/cqupi/dsh-computer-use-fusion.git
-# Headless profile:
-dsh plugin --profile headless add git+https://github.com/cqupi/dsh-computer-use-fusion.git
-```
-
-重启 DSH 宿主，创建新会话，加载 `/dsh-computer-use-fusion`。
-让模型先调用 `fusion_health`、`fusion_list_windows`，选择明确窗口，再调用
-`fusion_observe`。默认首次控制每个窗口需通过 DSH approval 服务获得本轮授权。
-如果宿主 approval policy 为 `never`，需要用户调整权限预设或手动操作。
-
-## 工作方式
-
-```mermaid
-flowchart LR
-  A[选择精确窗口] --> B[观察 UIA / AX 与可选截图]
-  B --> C[绑定调用者与一次性 observationId]
-  C --> D[作用域与控制审批]
-  D --> E[动作前重新检查状态]
-  E --> F[原生语义操作或显式前台输入]
-  F --> G[返回新观测与实际效果]
-```
-
-每个快照绑定 Agent 对象身份，避免同一会话的不同 Agent 共用编号。整套桌面事务
-串行执行；动作前校验状态、TTL 和窗口身份；旧 ID 在动作前消耗。高影响操作由
-`sensitive=true` 加一次性审批，危险标签检测提供额外防线。密码控件拒绝自动输入。
-
-坐标始终使用**工具返回图片的像素**。插件按 `mapping.origin` 和
-`mapping.screenPerPixel` 一次换算到后端坐标，包括附件服务再次缩放的情况。
-树模式的动作后观测不带图片；下一次坐标操作前需重新请求 `screenshot=true`。
-
-## 工具
-
-| 工具 | 用途 |
+| API | 用途 |
 | --- | --- |
-| `fusion_health` / `fusion_list_windows` | 后端诊断与目标发现 |
-| `fusion_observe` | UIA/AX 树、观测 ID、元素句柄、可选窗口截图 |
-| `fusion_click` | 元素点击或图片坐标点击，支持右键及双击 |
-| `fusion_type` / `fusion_key` | 文本与快捷键 |
-| `fusion_set_value` / `fusion_invoke` | 精确元素的原生语义操作 |
-| `fusion_scroll` / `fusion_drag` | 滚动与拖拽 |
-| `fusion_activate` | Windows 精确窗口激活 |
-| `fusion_ocr` | Windows 本地 OCR，输出屏幕坐标 |
-| `fusion_stop` | 写入停止标记，拒绝后续控制 |
+| `await cua.getState()` | 返回应用和窗口清单 |
+| `await cua.listWindows()` / `listApps()` | 单独列出窗口或应用 |
+| `await cua.getApp({windowId})` | 绑定窗口，自动显示初始 AX/UIA 树；也接受 `{pid}`、`{bundleId}` 或窗口名字符串 |
+| `await app.getAXState()` | 可读的编号元素树 |
+| `await app.getScreenshot()` | 真实图片及坐标映射 |
+| `await app.getAXStateAndScreenshot()` | 同时返回树和图片 |
+| `await app.click(12)` | 按元素编号点击，也接受元素名字符串 |
+| `await app.click([x,y], options)` | 按最近图片像素点击；`mouseButton` 和 `clickCount` 支持右键、双击 |
+| `await app.typeText(text)` / `paste(text)` | Unicode 输入；`paste` 是同一文本输入路径的便利别名，不更改系统剪贴板 |
+| `await app.pressKey('ctrl+a')` | 按键或组合键，Windows 支持 `win` |
+| `await app.setValue(12, text)` | 语义赋值，必要时使用焦点输入 |
+| `await app.invoke(12)` / `activate()` | 元素动作或窗口激活 |
+| `await app.scroll(12, 'down', 3)` | 在元素位置滚动，也接受图片坐标或 `undefined` 表示窗口中心 |
+| `await app.drag([x1,y1], [x2,y2])` | 拖动 |
+| `await app.ocr()` | Windows 本地 OCR |
+| `nodeRepl.write(value)` | 在工具结果中输出变量 |
 
-## 平台与真实限制
+坐标使用**最近返回图片中的像素**；插件按截图原点及缩放比例换算一次。
+AX 树刷新保留最近截图映射；未取过图时，首次坐标操作自动捕获以建立映射。
+窗口尺寸变化后重新取图，可以获得当前图片尺寸。图片经宿主再次缩放时也会更新映射。
 
-| 路径 | 依赖与行为 | 当前验证 |
+JavaScript 中的动作不强制逐步观察。完成一组动作后调用状态或截图方法，查看结果。
+运行错误会连同已完成的输出返回，已有变量通常仍可继续使用。
+JavaScript 在持久 Node worker 中执行；宿主取消或执行超时会终止 worker，下一次调用自动新建。
+普通取消不会写停止文件，也不要求人工恢复。Node worker 不是安全沙箱。
+
+## 直接工具
+
+也提供 `fusion_health`、`fusion_list_windows`、`fusion_observe`、`fusion_screenshot`、
+`fusion_click`、`fusion_type`、`fusion_key`、`fusion_scroll`、`fusion_drag`、
+`fusion_set_value`、`fusion_invoke`、`fusion_activate`、`fusion_ocr`。
+先观察一个窗口，后续操作省略窗口参数即可复用目标。
+`observationId` 仅作为旧接口兼容字段，既非必填，也非一次性；没有过期时间。
+直接动作默认返回新树和图片，可用 `observeAfter:false` 批量执行，再单独观察。
+
+## 平台与配置
+
+| 后端 | 依赖与行为 | 验证范围 |
 | --- | --- | --- |
-| Windows 原生（默认） | 系统 PowerShell 5.1、UIAutomation、Win32。优先后台语义操作。前台输入会激活目标，鼠标动作会移动真实光标。 | 本机专用 WinForms 测试窗口通过；应用差异仍需验证。 |
-| macOS 原生（默认） | macOS 14+，Accessibility 权限；截图还需 Screen Recording。捆绑 upstream universal helper，保留进程定向输入与 helper 状态校验。 | 二进制 SHA-256 与适配器合同检查；本机不能执行 macOS 实测。 |
-| `backend: cua`（可选） | 需单独安装 cua-driver，并通过 PATH 或 `CUA_DRIVER_BIN` 定位。使用驱动的虚拟光标。Linux 为实验性支持。 | 确定性适配器测试；未安装驱动的本机没有真实端到端验证。 |
-
-Windows 的 key/scroll/drag 需要显式 `foreground=true`，拒绝后台路径时不会自动
-重试前台。PostMessage 排队成功不代表应用接收成功；工具会返回 `verified:false`
-等后端事实，必须读取新的 UI 状态。窗口被遮挡时，截图可能退回屏幕区域捕获并
-标记 `occludedPossible`。UIA/AX 状态检查不能检测所有 Canvas、远程或瞬态变化，
-也不能完全消除检查与输入之间的竞争。危险词不是完整的安全决策机制。
-
-## 配置
-
-在 profile 的此插件配置中设置，修改后重启宿主：
+| Windows（默认） | 系统 PowerShell 5.1、UIA、Win32。语义操作优先，键盘和需要坐标的操作自动激活。使用真实鼠标。 | 本机专用 WinForms 窗口，含持久 JS、Unicode 输入、键盘和密码测试控件。 |
+| macOS（默认） | macOS 14+；系统 Accessibility / Screen Recording 权限。捆绑修改后构建的 arm64/x86_64 helper。 | CI 源码构建和宿主/适配器验证；尚未做真实 macOS GUI 测试。 |
+| `backend:cua` | 另行安装 cua-driver，通过 PATH 或 `CUA_DRIVER_BIN` 定位；使用其虚拟光标。 | 适配器测试；尚未做真实驱动会话测试。Linux 为实验性路径。 |
 
 ```yaml
-backend: auto                 # auto | windows | macos | cua
-ttlMs: 30000
+backend: auto                # auto | windows | macos | cua
 timeoutMs: 30000
 maxNodes: 250
-allowedApps: []                # 空=不额外限制；可填 macOS bundleId、Windows pid:<PID> 或精确窗口名
-requireControlApproval: true
 vision: true
 visionMaxPixels: 640000
 settleMs: 100
+screenshotAfterAction: true  # 直接工具的动作后截图；JS 入口由代码自行观察
 ```
 
-`vision=true` 仅在当前模型明确声明 image 输入、且宿主提供 attachments 服务时
-返回图片块；否则保留本地截图路径和映射。图片会经 DSH 发送给所选模型提供商。
-插件没有直接网络调用、遥测或自带密钥。截图写入系统临时目录：Windows 后端清理
-其 30 分钟以前的截图；macOS 临时目录需自行清理。
+图片通过 DSH attachments 服务交给当前图像模型；纯文本模型返回截图路径和映射。
+插件没有独立模型密钥、直接网络控制接口或遥测。截图保存在系统临时目录。
+原生控件是否接收了输入，应以之后的界面为准；后端也可能返回 `verified:false` 或捕获受遮挡的标记。
 
-## 停止与恢复
+## 验证
 
 ```text
-node scripts/doctor.mjs --stop
-node scripts/doctor.mjs --resume
+node scripts/validate.mjs
+node scripts/host-smoke.mjs .compat/alpha
 ```
 
-停止标记默认为系统临时目录的 `dsh-computer-use-fusion.stop`，可通过
-`DSH_FUSION_STOP_FILE` 指定。停止阻止后续输入；已提交的系统输入可能完成。
-`fusion_stop` 也会中断当前 Windows 后端。恢复只能由人执行，随后重新观察。
-
-## 开发与验证
-
-```text
-npm run check
-npm test
-npm run test:host
-npm run test:windows
-```
-
-Windows 测试只创建并操作自己的专用测试窗口，不关闭用户的应用。
-CI 检查 DSH 默认版及 alpha 版的注册/输出合同，并在 Windows runner 上执行专用
-UI 测试。没有宣称已完成模型驱动的全应用或全平台验证。
-
-详见 [架构](docs/ARCHITECTURE.md)、[验证记录](docs/VALIDATION.md) 和
-[安全边界](SECURITY.md)。欢迎提交复现步骤与脱敏日志。
+测试操作自己的专用窗口。完整范围见 [验证记录](docs/VALIDATION.md) 与
+[架构说明](docs/ARCHITECTURE.md)。

@@ -33,3 +33,9 @@ jobs:
         with:
           node-version: '24'
       - run: node scripts/build-macos.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fusion-macos-helper
+          path: |
+            native/macos/bin/dsh-computer-use-helper
+            native/macos/manifest.json

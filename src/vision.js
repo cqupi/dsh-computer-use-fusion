@@ -14,8 +14,8 @@ export function mapping(bounds, width, height) {
 }
 
 export function imagePoint(map, x, y) {
-  if (!map || !Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= map.width || y >= map.height) {
-    throw new Error('POINT_OUTSIDE_OBSERVED_IMAGE');
+  if (!map || !Number.isFinite(x) || !Number.isFinite(y)) {
+    throw new Error('IMAGE_COORDINATES_REQUIRED');
   }
   return { x: Math.round(map.origin[0] + x * map.screenPerPixel[0]),
     y: Math.round(map.origin[1] + y * map.screenPerPixel[1]) };

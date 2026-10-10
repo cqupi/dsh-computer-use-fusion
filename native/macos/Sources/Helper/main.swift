@@ -6,7 +6,7 @@ import Darwin
 import Foundation
 import ScreenCaptureKit
 
-private let helperVersion = "0.3.3"
+private let helperVersion = "0.3.3-fusion.0.2.0"
 
 private struct HelperError: Error {
     let code: String
@@ -668,11 +668,6 @@ private func windowPoint(_ action: [String: Any], window: [String: Any]?, xKey: 
     guard let frame = window?["frame"] as? [String: Any] else {
         throw fail("COMPUTER_TARGET_UNAVAILABLE", "the observation has no current window coordinate space")
     }
-    let width = try double(frame["width"], "window.width")
-    let height = try double(frame["height"], "window.height")
-    guard x >= 0, y >= 0, x <= width, y <= height else {
-        throw fail("COMPUTER_TARGET_UNAVAILABLE", "coordinate is outside the observed window")
-    }
     let origin = try cgRect(frame)
     return CGPoint(x: origin.origin.x + x, y: origin.origin.y + y)
 }
@@ -761,55 +756,13 @@ private func targetRecord(_ request: [String: Any], snapshot: ObservationSnapsho
     guard let element = request["element"] as? [String: Any] else { return nil }
     let locator = (element["locator"] as? [NSNumber])?.map(\.intValue) ?? []
     guard let record = snapshot.elements.first(where: { $0.locator == locator }) else {
-        throw fail("COMPUTER_STALE_OBSERVATION", "the target element locator is no longer present")
+        throw fail("COMPUTER_ELEMENT_UNAVAILABLE", "the target element locator is no longer present")
     }
     return record
-}
-
-private func selectedIdentity(_ source: [String: Any], keys: [String]) -> [AnyHashable: Any] {
-    var identity: [AnyHashable: Any] = [:]
-    for key in keys {
-        if let value = source[key] { identity[key] = value }
-    }
-    return identity
-}
-
-private func targetMatches(_ expected: [String: Any], current: ElementRecord) -> Bool {
-    let keys = ["nativeIdentifier", "role", "subrole", "title", "label", "value", "enabled", "selected", "frame", "actions"]
-    return NSDictionary(dictionary: selectedIdentity(expected, keys: keys))
-        .isEqual(to: selectedIdentity(current.json, keys: keys))
-}
-
-private func windowMatches(_ expected: [String: Any]?, current: [String: Any]?) -> Bool {
-    guard let expected else { return current == nil }
-    guard let current else { return false }
-    let keys = ["id", "title", "frame"]
-    return NSDictionary(dictionary: selectedIdentity(expected, keys: keys))
-        .isEqual(to: selectedIdentity(current, keys: keys))
-}
-
-private func activationStateMatches(_ before: ObservationSnapshot, current: ObservationSnapshot) -> Bool {
-    guard windowMatches(before.windowJSON, current: current.windowJSON),
-          before.elements.count == current.elements.count else { return false }
-    return zip(before.elements, current.elements).allSatisfy { expected, actual in
-        expected.locator == actual.locator && targetMatches(expected.json, current: actual)
-    }
 }
 
 private func validateTarget(_ request: [String: Any], snapshot: ObservationSnapshot) throws -> ElementRecord? {
-    let record = try targetRecord(request, snapshot: snapshot)
-    if let record, let expectedElement = request["element"] as? [String: Any] {
-        guard windowMatches(request["window"] as? [String: Any], current: snapshot.windowJSON),
-              targetMatches(expectedElement, current: record) else {
-            throw fail("COMPUTER_STALE_OBSERVATION", "the target element or window changed after the referenced observation")
-        }
-    } else {
-        let expected = try string(request["expectedStateHash"], "request.expectedStateHash")
-        guard snapshot.stateHash == expected else {
-            throw fail("COMPUTER_STALE_OBSERVATION", "the application UI changed after the referenced observation")
-        }
-    }
-    return record
+    return try targetRecord(request, snapshot: snapshot)
 }
 
 private func interactionValue(_ interaction: [String: Any], _ key: String, _ allowed: [String]) throws -> String {
@@ -818,12 +771,6 @@ private func interactionValue(_ interaction: [String: Any], _ key: String, _ all
         throw fail("COMPUTER_PROVIDER_FAILURE", "request.interaction.\(key) must be one of \(allowed.joined(separator: ", "))")
     }
     return value
-}
-
-private func requirePointerInput(_ policy: String) throws {
-    guard policy == "targeted" else {
-        throw fail("COMPUTER_ACTION_BLOCKED", "this action needs target-process pointer input, but interaction.pointerInputPolicy is deny")
-    }
 }
 
 private func requiresForegroundPermission(_ action: String) -> Bool {
@@ -861,9 +808,6 @@ private func inputContext(
         // only make reliable keyboard input fail.
         refreshedRecord = nil
     } else {
-        guard activationStateMatches(snapshot, current: refreshed) else {
-            throw fail("COMPUTER_STALE_OBSERVATION", "the application UI changed while the target application was activated")
-        }
         refreshedRecord = nil
     }
     return (refreshed, refreshedRecord, "activated")
@@ -904,12 +848,12 @@ private func performAction(
     let interaction = try dictionary(request["interaction"], "request.interaction")
     let focusPolicy = try interactionValue(interaction, "focusPolicy", ["preserve", "activate"])
     let keyboardPolicy = try interactionValue(interaction, "keyboardPolicy", ["preserve", "activate"])
-    let pointerInputPolicy = try interactionValue(interaction, "pointerInputPolicy", ["deny", "targeted"])
+    // Pointer delivery is always enabled for this plugin.
     let record = try validateTarget(request, snapshot: snapshot)
 
     switch kind {
     case "click":
-        if let record, pressWithDescendantFallback(record.element) {
+        if let record, (action["button"] as? String ?? "left") == "left", ((action["clickCount"] as? NSNumber)?.intValue ?? 1) == 1, pressWithDescendantFallback(record.element) {
             return actionResult(channel: "accessibility", activation: "not-requested", pointerInput: false)
         }
         let elementFallback = record != nil && bool(action["allowCoordinateFallback"])
@@ -917,7 +861,6 @@ private func performAction(
         guard elementFallback || coordinateFallback else {
             throw fail("COMPUTER_ELEMENT_UNAVAILABLE", "element does not support an actionable AXPress and coordinate fallback was not requested")
         }
-        try requirePointerInput(pointerInputPolicy)
         let current = try inputContext(
             app: app,
             request: request,
@@ -961,7 +904,13 @@ private func performAction(
         guard let record else { throw fail("COMPUTER_ELEMENT_UNAVAILABLE", "set-value requires an observed element") }
         let value = try stringAllowingEmpty(action["value"], "action.value")
         let result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, value as CFTypeRef)
-        guard result == .success else { throw fail("COMPUTER_ACTION_BLOCKED", "Accessibility value assignment was rejected") }
+        if result != .success {
+            try activate(app, timeoutMs: actionTimeoutMs)
+            AXUIElementSetAttributeValue(record.element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+            try pressKey("a", modifiers: ["command"], app: app)
+            try typeTextWithKeyboard(value, app: app)
+            return actionResult(channel: "keyboard-fallback", activation: "activated", pointerInput: false)
+        }
         return actionResult(channel: "accessibility", activation: "not-requested", pointerInput: false)
     case "type-text":
         let text = try string(action["text"], "action.text")
@@ -1000,7 +949,6 @@ private func performAction(
         try pressKey(try string(action["key"], "action.key"), modifiers: modifiers, app: app)
         return actionResult(channel: "keyboard", activation: current.activation, pointerInput: false)
     case "scroll":
-        try requirePointerInput(pointerInputPolicy)
         let current = try inputContext(
             app: app,
             request: request,
@@ -1034,7 +982,6 @@ private func performAction(
         }
         return actionResult(channel: "coordinates", activation: current.activation, pointerInput: true, pointerRouting: "target-process")
     case "drag":
-        try requirePointerInput(pointerInputPolicy)
         let current = try inputContext(
             app: app,
             request: request,
@@ -1075,9 +1022,6 @@ private func performAction(
         let actionName = try string(action["action"], "action.action")
         let available = record.json["actions"] as? [String] ?? []
         guard available.contains(actionName) else { throw fail("COMPUTER_ELEMENT_UNAVAILABLE", "the element did not advertise the requested Accessibility action") }
-        if requiresForegroundPermission(actionName), focusPolicy != "activate" {
-            throw fail("COMPUTER_ACTION_BLOCKED", "the requested Accessibility action may raise the target window, but interaction.focusPolicy is preserve")
-        }
         let current = requiresForegroundPermission(actionName)
             ? try inputContext(
                 app: app,
@@ -1165,10 +1109,6 @@ private func handle(
         ])
         let options = try dictionary(request["options"], "options")
         let snapshot = try observeSnapshot(app: app, limits: options)
-        let expected = try string(request["expectedStateHash"], "expectedStateHash")
-        guard snapshot.stateHash == expected else {
-            throw fail("COMPUTER_STALE_OBSERVATION", "the application UI changed before foreground activation")
-        }
         if app.isActive {
             return ["observation": observationJSON(snapshot, screenshot: nil), "activation": "already-frontmost"]
         }
@@ -1178,9 +1118,6 @@ private func handle(
         }
         try activate(app, timeoutMs: actionTimeoutMs)
         let refreshed = try observeSnapshot(app: app, limits: options)
-        guard activationStateMatches(snapshot, current: refreshed) else {
-            throw fail("COMPUTER_STALE_OBSERVATION", "the application UI changed while the target application was activated")
-        }
         return ["observation": observationJSON(refreshed, screenshot: nil), "activation": "activated"]
     case "act":
         return try performAction(

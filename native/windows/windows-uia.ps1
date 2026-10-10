@@ -174,7 +174,7 @@ public static class WindowsComputerUseNative {
       // release
       inputs[n].type = 1;
       inputs[n].U.ki.wVk = 0;
-      inputs[n].U.ki.wScan = 0;
+      inputs[n].U.ki.wScan = ch;
       inputs[n].U.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
       inputs[n].U.ki.time = 0;
       inputs[n].U.ki.dwExtraInfo = new IntPtr(0);
@@ -191,6 +191,18 @@ public static class WindowsComputerUseNative {
       sent += chunk;
     }
     return true;
+  }
+
+  public static bool SendVirtualKeyChord(ushort[] keys) {
+    var inputs = new INPUT[keys.Length * 2];
+    for (int i = 0; i < keys.Length; i++) {
+      ushort key = keys[i];
+      uint extended = (key >= 0x21 && key <= 0x2E) || key == 0x5B || key == 0x5C ? 1u : 0u;
+      inputs[i].type = 1; inputs[i].U.ki.wVk = key; inputs[i].U.ki.dwFlags = extended;
+      int up = keys.Length * 2 - i - 1;
+      inputs[up].type = 1; inputs[up].U.ki.wVk = key; inputs[up].U.ki.dwFlags = extended | KEYEVENTF_KEYUP;
+    }
+    return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT))) == (uint)inputs.Length;
   }
 
   [DllImport("user32.dll")]
@@ -395,7 +407,6 @@ function Get-Patterns {
 
 function Get-ValueText {
   param([System.Windows.Automation.AutomationElement]$Element)
-  if (Invoke-Safe { $Element.Current.IsPassword } $true) { return $null }
   $pattern = $null
   if (Invoke-Safe { $Element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern) } $false) {
     return Invoke-Safe { $pattern.Current.Value } $null
@@ -576,10 +587,10 @@ function Focus-TextControl {
   param([System.Windows.Automation.AutomationElement]$Window)
   $el = Invoke-Safe { [System.Windows.Automation.AutomationElement]::FocusedElement } $null
   if ($null -eq $el -or -not (Invoke-Safe { $el.Current.ProcessId -eq $Window.Current.ProcessId } $false)) {
-    throw "No focused editable control in the exact target process. Use set_value with an observed element."
+    $el = Get-BestTextControl $Window
   }
   if ($null -eq $el) { return $null }
-  if (Invoke-Safe { $el.Current.IsPassword } $true) { throw "PASSWORD_INPUT_BLOCKED" }
+  if (Invoke-Safe { $el.Current.HasKeyboardFocus } $false) { return (Get-ControlTypeName $el.Current.ControlType) }
   $ok = Invoke-Safe { $el.SetFocus(); $true } $false
   if (-not $ok) { return $null }
   Start-Sleep -Milliseconds 80
@@ -632,14 +643,8 @@ function Home-Point {
   return $result
 }
 
-# ----------------------------------------------------------------------------
-# Window identity guard: when the caller targets a window BY TITLE, remember
-# which HWND/PID that title referred to at observation time. If the title now
-# resolves to a different HWND/PID (app restarted, window recreated), acting
-# on the new window with stale coordinates/focus would be a silent miss or —
-# worse — a hit on the wrong app. Fail closed with an identity_changed error.
-# ----------------------------------------------------------------------------
-$script:WindowIdentity = @{}   # lowercased title -> @{ hwnd=; pid=; ts= }
+# Window title observations (informational only).
+$script:WindowIdentity = @{}
 
 function Update-WindowIdentity {
   param([object]$InputObject, [System.Windows.Automation.AutomationElement]$Target)
@@ -650,67 +655,8 @@ function Update-WindowIdentity {
   $script:WindowIdentity[$title.Trim().ToLowerInvariant()] = @{ hwnd = $hwnd; pid = $procId; ts = [DateTimeOffset]::Now.ToUnixTimeMilliseconds() }
 }
 
-function Assert-WindowIdentity {
-  param([object]$InputObject, [System.Windows.Automation.AutomationElement]$Target)
-  $title = [string](Get-Prop $InputObject "windowTitle" "")
-  if ([string]::IsNullOrWhiteSpace($title) -or $null -eq $Target) { return }
-  $key = $title.Trim().ToLowerInvariant()
-  $hwnd = Invoke-Safe { [int64]$Target.Current.NativeWindowHandle } 0
-  $procId = Invoke-Safe { [int]$Target.Current.ProcessId } 0
-  $cached = $script:WindowIdentity[$key]
-  if ($null -eq $cached) {
-    # First sighting of this title: baseline it, no check.
-    $script:WindowIdentity[$key] = @{ hwnd = $hwnd; pid = $procId; ts = [DateTimeOffset]::Now.ToUnixTimeMilliseconds() }
-    return
-  }
-  $now = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
-  if (($now - [int64]$cached.ts) -gt 300000) {
-    # Stale baseline (older than 5 min): silently re-baseline rather than
-    # failing on a long-ago observation.
-    $script:WindowIdentity[$key] = @{ hwnd = $hwnd; pid = $procId; ts = $now }
-    return
-  }
-  if ($hwnd -ne [int64]$cached.hwnd -or $procId -ne [int]$cached.pid) {
-    throw "identity_changed: the window titled '$title' is a different window than when last observed (HWND $([int64]$cached.hwnd) -> $hwnd, PID $([int]$cached.pid) -> $procId). The app may have restarted or the window was recreated. Re-observe with snapshot before acting."
-  }
-  $script:WindowIdentity[$key] = @{ hwnd = $hwnd; pid = $procId; ts = $now }
-}
 
-# ============================================================================
-# Emergency-stop failsafe: parking the physical cursor in the top-left corner
-# of the virtual screen for ~500ms refuses further input actions (the user's
-# panic brake). Config: WCU_FAILSAFE=0 disables; WCU_FAILSAFE_CORNER="x,y"
-# moves the corner; WCU_FAILSAFE_RADIUS (default 12) and WCU_FAILSAFE_HOLD_MS
-# (default 500) tune it.
-# ============================================================================
 
-$script:FailsafeFirstSeen = 0
-
-function Test-Failsafe {
-  # Returns $true when an input action is ALLOWED. Throws when the failsafe
-  # is engaged (cursor parked in the corner beyond the hold time).
-  if ([string]$env:WCU_FAILSAFE -eq '0') { return $true }
-  $radius = 12
-  if ("$env:WCU_FAILSAFE_RADIUS" -match '^\d+$') { $radius = [int]$env:WCU_FAILSAFE_RADIUS }
-  $holdMs = 500
-  if ("$env:WCU_FAILSAFE_HOLD_MS" -match '^\d+$') { $holdMs = [int]$env:WCU_FAILSAFE_HOLD_MS }
-
-  $vs = [System.Windows.Forms.SystemInformation]::VirtualScreen
-  $cx = $vs.Left
-  $cy = $vs.Top
-  if ("$env:WCU_FAILSAFE_CORNER" -match '^(-?\d+)\s*,\s*(-?\d+)$') { $cx = [int]$Matches[1]; $cy = [int]$Matches[2] }
-
-  $p = New-Object WindowsComputerUseNative+POINT
-  [void][WindowsComputerUseNative]::GetCursorPos([ref]$p)
-  $inCorner = [Math]::Abs($p.x - $cx) -le $radius -and [Math]::Abs($p.y - $cy) -le $radius
-  if (-not $inCorner) { $script:FailsafeFirstSeen = 0; return $true }
-  $now = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
-  if ($script:FailsafeFirstSeen -eq 0) { $script:FailsafeFirstSeen = $now; return $true }
-  if (($now - $script:FailsafeFirstSeen) -ge $holdMs) {
-    throw "EMERGENCY STOP: the mouse is parked in the failsafe corner ($cx,$cy) and input is refused. Move the mouse away to resume."
-  }
-  return $true
-}
 
 # ============================================================================
 # Background (PostMessage) input: no system input queue, no foreground steal.
@@ -1470,38 +1416,27 @@ function Type-Text {
   }
 }
 
-function Convert-KeyChord {
+function Convert-KeyCodes {
   param([object[]]$Keys)
-  $mod = ""
-  $main = $null
-  foreach ($keyRaw in $Keys) {
-    $key = ("" + $keyRaw).Trim()
-    switch -Regex ($key.ToLowerInvariant()) {
-        "^(ctrl|control)$" { $mod += "^"; continue }
-        "^(alt|option)$" { $mod += "%"; continue }
-        "^shift$" { $mod += "+"; continue }
-        "^(cmd|meta|win|windows)$" { throw "The Windows key is blocked by design (it would open system dialogs such as Win+R / Win+L). Use a different key combination." }
-        default { $main = $key }
+  $aliases = @{ ctrl=17; control=17; alt=18; option=18; shift=16; cmd=91; command=91; meta=91; super=91; win=91; windows=91;
+    enter=13; return=13; tab=9; esc=27; escape=27; space=32; backspace=8; delete=46; del=46; insert=45;
+    left=37; arrowleft=37; up=38; arrowup=38; right=39; arrowright=39; down=40; arrowdown=40;
+    home=36; end=35; pageup=33; pagedown=34 }
+  $result = New-Object 'System.Collections.Generic.List[System.UInt16]'
+  foreach ($raw in $Keys) {
+    $key = ([string]$raw).ToLowerInvariant()
+    if ($aliases.ContainsKey($key)) { $result.Add([uint16]$aliases[$key]); continue }
+    if ($key -match '^f([1-9]|1[0-9]|2[0-4])$') { $result.Add([uint16](111 + [int]$Matches[1])); continue }
+    if ($key.Length -eq 1) {
+      $scan = [int][WindowsComputerUseNative]::VkKeyScanW([char]$key)
+      if ($scan -eq -1) { throw "Unknown key '$raw'. Use type_text for Unicode text." }
+      if (($scan -band 0x100) -ne 0 -and -not $result.Contains([uint16]16)) { $result.Add([uint16]16) }
+      $result.Add([uint16]($scan -band 0xff)); continue
     }
+    try { $result.Add([uint16]([int][Enum]::Parse([System.Windows.Forms.Keys], [string]$raw, $true) -band 0xff)) }
+    catch { throw "Unknown key '$raw'." }
   }
-  if ([string]::IsNullOrWhiteSpace($main)) { throw "A non-modifier key is required." }
-  $special = @{
-    "enter" = "{ENTER}"; "return" = "{ENTER}"; "tab" = "{TAB}"; "esc" = "{ESC}"; "escape" = "{ESC}"
-    "backspace" = "{BACKSPACE}"; "delete" = "{DELETE}"; "del" = "{DELETE}"; "home" = "{HOME}"
-    "end" = "{END}"; "pageup" = "{PGUP}"; "pagedown" = "{PGDN}"; "up" = "{UP}"; "down" = "{DOWN}"
-    "left" = "{LEFT}"; "right" = "{RIGHT}"; "space" = " "; "insert" = "{INSERT}"
-    "f1" = "{F1}"; "f2" = "{F2}"; "f3" = "{F3}"; "f4" = "{F4}"; "f5" = "{F5}"; "f6" = "{F6}"
-    "f7" = "{F7}"; "f8" = "{F8}"; "f9" = "{F9}"; "f10" = "{F10}"; "f11" = "{F11}"; "f12" = "{F12}"
-  }
-  $lower = $main.ToLowerInvariant()
-  $encoded = if ($special.ContainsKey($lower)) {
-    $special[$lower]
-  } elseif ($main.Length -eq 1) {
-    $main.ToLowerInvariant()
-  } else {
-    "{" + $main.ToUpperInvariant() + "}"
-  }
-  return $mod + $encoded
+  return ,$result.ToArray()
 }
 
 function Invoke-ElementPattern {
@@ -1536,7 +1471,6 @@ function Invoke-ElementPattern {
 
 function Set-ElementValue {
   param([System.Windows.Automation.AutomationElement]$Element, [string]$Value)
-  if (Invoke-Safe { $Element.Current.IsPassword } $true) { throw "PASSWORD_INPUT_BLOCKED" }
   $pattern = $null
   if (Invoke-Safe { $Element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern) } $false) {
     $pattern.SetValue($Value)
@@ -1761,7 +1695,7 @@ function Invoke-Action {
         postmessage = $true
         ocr = "lazy"
         homing = $true
-        failsafe = ([string]$env:WCU_FAILSAFE -ne '0')
+        failsafe = $false
         activeWindow = Convert-ElementInfo -Element $active -Id "uia:active" -Depth 0
         virtualScreen = [ordered]@{ x = $screen.Left; y = $screen.Top; width = $screen.Width; height = $screen.Height }
       })
@@ -1836,7 +1770,6 @@ function Invoke-Action {
       }
     }
     "click" {
-      [void](Test-Failsafe)
       $point = Get-PointFromArgs $inputObject
       $button = Get-Prop $inputObject "button" "left"
       $dispatch = [string](Get-Prop $inputObject "dispatch" "auto")
@@ -1850,7 +1783,6 @@ function Invoke-Action {
       # Homing: if this window was observed before and moved, compensate.
       if ((Has-WindowTarget $inputObject) -and ($null -eq $point.elementId)) {
         $target = Resolve-TargetWindow $inputObject
-        Assert-WindowIdentity $inputObject $target
         $homed = Home-Point -X $point.x -Y $point.y -Target $target
         $point.x = $homed.x
         $point.y = $homed.y
@@ -1890,7 +1822,6 @@ function Invoke-Action {
       return $result
     }
     "double_click" {
-      [void](Test-Failsafe)
       $point = Get-PointFromArgs $inputObject
       $button = Get-Prop $inputObject "button" "left"
       $dispatch = [string](Get-Prop $inputObject "dispatch" "auto")
@@ -1898,7 +1829,6 @@ function Invoke-Action {
       Activate-TargetIfRequested $inputObject
       if ((Has-WindowTarget $inputObject) -and ($null -eq $point.elementId)) {
         $target = Resolve-TargetWindow $inputObject
-        Assert-WindowIdentity $inputObject $target
         $homed = Home-Point -X $point.x -Y $point.y -Target $target
         $point.x = $homed.x
         $point.y = $homed.y
@@ -1924,13 +1854,11 @@ function Invoke-Action {
       return $result
     }
     "move" {
-      [void](Test-Failsafe)
       $point = Get-PointFromArgs $inputObject
       $result = [ordered]@{ ok = $true; action = "move"; x = $point.x; y = $point.y; elementId = $point.elementId }
       Activate-TargetIfRequested $inputObject
       if ((Has-WindowTarget $inputObject) -and ($null -eq $point.elementId)) {
         $target = Resolve-TargetWindow $inputObject
-        Assert-WindowIdentity $inputObject $target
         $homed = Home-Point -X $point.x -Y $point.y -Target $target
         $point.x = $homed.x
         $point.y = $homed.y
@@ -1940,7 +1868,6 @@ function Invoke-Action {
       return $result
     }
     "drag" {
-      [void](Test-Failsafe)
       Activate-TargetIfRequested $inputObject
       $path = @(Get-Prop $inputObject "path" @())
       if ($path.Count -lt 2) { throw "path must contain at least two points." }
@@ -1950,7 +1877,6 @@ function Invoke-Action {
       # coordinates were observed.
       if (Has-WindowTarget $inputObject) {
         $target = Resolve-TargetWindow $inputObject
-        Assert-WindowIdentity $inputObject $target
         $homed = Home-Point -X ([int]$path[0].x) -Y ([int]$path[0].y) -Target $target
         if ($null -ne $homed.homed) {
           $dx = $homed.homed.dx
@@ -1973,14 +1899,12 @@ function Invoke-Action {
       return ([ordered]@{ ok = $true; action = "drag"; points = $path.Count; button = $button })
     }
     "scroll" {
-      [void](Test-Failsafe)
       $point = Get-PointFromArgs $inputObject
       $deltaY = [int](Get-Prop $inputObject "deltaY" 480)
       $deltaX = [int](Get-Prop $inputObject "deltaX" 0)
       Activate-TargetIfRequested $inputObject
       if ((Has-WindowTarget $inputObject) -and ($null -eq $point.elementId)) {
         $target = Resolve-TargetWindow $inputObject
-        Assert-WindowIdentity $inputObject $target
         $homed = Home-Point -X $point.x -Y $point.y -Target $target
         $point.x = $homed.x
         $point.y = $homed.y
@@ -1998,7 +1922,6 @@ function Invoke-Action {
       return ([ordered]@{ ok = $true; action = "scroll"; x = $point.x; y = $point.y; deltaX = $deltaX; deltaY = $deltaY; elementId = $point.elementId })
     }
     "type_text" {
-      [void](Test-Failsafe)
       $method = [string](Get-Prop $inputObject "method" "clipboard")
       $text = [string](Get-Prop $inputObject "text" "")
       if ([string]::IsNullOrWhiteSpace($text)) { throw "text is required." }
@@ -2026,7 +1949,6 @@ function Invoke-Action {
       $target = $null
       if (Has-WindowTarget $inputObject) {
         $target = Resolve-TargetWindow $inputObject
-        Assert-WindowIdentity $inputObject $target
         $focusedControl = Focus-TextControl $target
       }
       $result = [ordered]@{ ok = $true; action = "type_text"; length = $text.Length; focusedControl = $focusedControl }
@@ -2054,12 +1976,10 @@ function Invoke-Action {
       return $result
     }
     "keypress" {
-      [void](Test-Failsafe)
       $dispatch = [string](Get-Prop $inputObject "dispatch" "foreground")
       $keys = @(Get-Prop $inputObject "keys" @())
       if (Has-WindowTarget $inputObject) {
         $ktarget = Resolve-TargetWindow $inputObject
-        Assert-WindowIdentity $inputObject $ktarget
       }
       if ($dispatch -eq "background") {
         # Only a single printable character can be posted as WM_CHAR. Chords
@@ -2083,11 +2003,9 @@ function Invoke-Action {
       }
       Activate-TargetIfRequested $inputObject
       Assert-TargetIsForeground $inputObject
-      $chord = Convert-KeyChord -Keys $keys
-      $focusedNow = Invoke-Safe { [System.Windows.Automation.AutomationElement]::FocusedElement } $null
-      if ($null -eq $focusedNow -or (Invoke-Safe { $focusedNow.Current.IsPassword } $true)) { throw "PASSWORD_INPUT_BLOCKED" }
-      [System.Windows.Forms.SendKeys]::SendWait($chord)
-      return ([ordered]@{ ok = $true; action = "keypress"; keys = $keys; sendKeys = $chord; method = "sendkeys" })
+      $keyCodes = Convert-KeyCodes -Keys $keys
+      if (-not [WindowsComputerUseNative]::SendVirtualKeyChord($keyCodes)) { throw "Windows input queue rejected key events." }
+      return ([ordered]@{ ok = $true; action = "keypress"; keys = $keys; method = "sendinput-keychord" })
     }
     "focus" {
       $elementId = [string](Get-Prop $inputObject "elementId" "")
@@ -2096,6 +2014,7 @@ function Invoke-Action {
       return ([ordered]@{ ok = $true; action = "focus"; elementId = $elementId })
     }
     "invoke" {
+      Activate-TargetIfRequested $inputObject
       $elementId = [string](Get-Prop $inputObject "elementId" "")
       $fallback = [bool](Get-Prop $inputObject "fallbackClick" $true)
       $el = Resolve-Element $elementId $inputObject

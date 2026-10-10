@@ -23,23 +23,23 @@ fakeProvider.observe = async (_target, screenshot) => ({ target, elements: [], f
   screenshot: screenshot ? { data: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64'), bounds: { x: 20, y: 30, width: 2, height: 2 } } : undefined });
 const { FusionCore } = await import('../src/core.js');
 const core = new FusionCore(fakeProvider);
-const releases = createTools(core, sdk.defineTool, () => ({ owner: 'test', signal: AbortSignal.timeout(5000) }))
-  .map(tool => ctx.tools.register(tool));
+const tools = createTools(core, sdk.defineTool, () => ({ owner: 'test', signal: AbortSignal.timeout(5000) }));
+const releases = tools.map(tool => ctx.tools.register(tool));
 const releaseSkill = ctx.skills.register(skill);
-assert.equal(ctx.tools.schemas().length, 13);
+assert.equal(ctx.tools.schemas().length, 14);
 const result = await ctx.tools.execute({ name: 'fusion_health', arguments: {}, callId: 'host-smoke', signal: AbortSignal.timeout(5000) });
 assert.equal(result.isError, false, JSON.stringify(result));
 assert.equal(result.value.ok, true);
 assert.equal(result.content[0].type, 'text');
 releases.forEach(release => release());
+await tools.dispose();
 releaseSkill();
 assert.equal(ctx.tools.schemas().length, 0, 'Disposal unregisters all tools');
-ctx.provide('approval', { config: { policy: 'ask' }, request: async () => 'allowed-once' });
 ctx.provide('llm', { resolveModelInfo: async () => ({ inputModalities: ['text', 'image'] }) });
 ctx.provide('attachments', { saveImage: async ({ data }) => ({ attachmentId: 'contract-image', mediaType: 'image/png', bytes: data.length, width: 1, height: 1 }) });
-const installed = ctx.plugin({ inject: ['tools', 'approval'], apply: (child, config) => apply(child, config, fakeProvider) }, {});
+const installed = ctx.plugin({ inject: ['tools'], apply: (child, config) => apply(child, config, fakeProvider) }, {});
 await installed;
-assert.equal(ctx.tools.schemas().length, 13, 'Actual plugin lifecycle installs all tools');
+assert.equal(ctx.tools.schemas().length, 14, 'Actual plugin lifecycle installs all tools without approval service');
 const agent = { session: { id: 'session-test', header: { createdAt: 1 }, snapshotEvents: () => [{ type: 'turn/start', data: { turn: 1 } }] }, options: {} };
 const dispatched = await ctx.tools.execute({ name: 'fusion_health', arguments: {}, agent,
   callId: 'plugin-smoke', signal: AbortSignal.timeout(5000) });
@@ -49,9 +49,14 @@ const visual = await ctx.tools.execute({ name: 'fusion_observe', arguments: { sc
 assert.equal(visual.isError, false, JSON.stringify(visual));
 assert.equal(visual.content[1].type, 'image');
 assert.deepEqual(visual.value.mapping.screenPerPixel, [2, 2]);
+const js = await ctx.tools.execute({ name: 'fusion_computer', arguments: { code: 'let app = await cua.getApp({windowId:5}); await app.getScreenshot();' }, agent,
+  callId: 'repl-smoke', signal: AbortSignal.timeout(10000) });
+assert.equal(js.isError, false, JSON.stringify(js));
+assert.equal(js.value.ok, true, JSON.stringify(js));
+assert.equal(js.content.filter(block => block.type === 'image').length, 1);
 await installed.dispose();
 assert.equal(ctx.tools.schemas().length, 0, 'Actual plugin unload unregisters all tools');
 assert.equal(plugin.name, 'dsh-computer-use-fusion');
 await skillFiber.dispose();
 await toolFiber.dispose();
-console.log(`PASS: real Cordis + DSH tools/skills ${version}, 13 registered schemas, dispatch/output validation, clean unregistration.`);
+console.log(`PASS: real Cordis + DSH tools/skills ${version}, 14 schemas, no approval dependency, persistent JS image output, clean unregistration.`);

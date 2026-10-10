@@ -1,52 +1,56 @@
-# Validation record — 2026-10-10 (Asia/Hong_Kong)
+# Validation — 0.2.0, 2026-10-10 (Asia/Hong_Kong)
 
-Baseline from the official npm registry at implementation time:
-`@deepseek-ai/dsh` latest/next = **0.2.0-rc.2**, alpha = **0.2.1-alpha.2**.
-These are developer-preview releases, not a claim of stable DSH support forever.
-The plugin pins its compatibility to those exact published generations.
+DSH default/next is 0.2.0-rc.2; alpha is 0.2.1-alpha.2. Validation uses Node
+24.19.0 on Windows and Node 24 in hosted Linux/macOS/Windows jobs. The local
+system Node 22.17.1 is below the required 22.19 and was not changed.
 
-Local machine: Windows, Node **24.19.0** for final validation. The system Node
-22.17.1 is below the documented requirement; the bundled Node 24 runtime was
-used without modifying the user's system installation.
-
-| Check | Evidence / scope |
-| --- | --- |
-| Syntax, DSH input/output schemas and bundle identity | `node scripts/check.mjs`; all 13 schemas accepted by the current SDK. |
-| macOS release artifact integrity | Pinned binary SHA-256 and helper Swift source tree hash match upstream manifest. |
-| Deterministic tests | 17 tests covering caller isolation, one-use IDs, TTL/state refusal, scope, approval denial/latency, password guard, image mapping, real PNG budget fitting, process cancellation/generation discard and adapter payloads. |
-| DSH 0.2.0-rc.2 host contract | Real Cordis, ToolRuntime and Skill service. Registered and dispatched tools with canonical output validation; actual plugin load/unload; image attachment rendering. |
-| DSH 0.2.1-alpha.2 host contract | Same contract against separately installed published alpha tools/skill packages. This is not an alpha full-profile/model E2E test. |
-| DSH CLI 0.2.0-rc.2 profile integration | Installed local plugin through `dsh plugin` into isolated Web and Headless profiles. Both composed `--dump-config` outputs include the Fusion bundle and config. User profiles were not modified. |
-| Public Git installation | Installed `git+https://github.com/cqupi/dsh-computer-use-fusion.git` through the real DSH CLI into a separate Headless profile. Composed config and `--dump-config-schema` succeed and include Fusion's config schema. pnpm reports absent profile-local SDK peers because this profile uses the installation's shared SDK; DSH's runtime resolver successfully imports the plugin. |
-| Native Windows fixture | A separate WinForms process: exact HWND/PID discovery, window capture/downscale, Unicode semantic value write and UIA readback, background invoke and observed status change, password rejection and externally changed-state rejection. Only this process was operated and closed. |
-| Package contents | `npm pack`; sources, native providers, licenses, skills and bundle patch included; upstream checkouts, host sandboxes, screenshots and local paths excluded. |
-| Hosted CI | [Initial source validation](https://github.com/cqupi/dsh-computer-use-fusion/actions/runs/38029512724) passed all seven jobs: Windows/macOS/Linux host contracts for both DSH versions, Windows native fixture, and universal macOS helper source rebuild. This does not establish macOS GUI behavior. |
-
-Reproduce the local core/host/native checks:
+## Reproducible checks
 
 ```text
 node scripts/validate.mjs
-```
-
-For the alpha contract:
-
-```text
-npm install --prefix .compat/alpha --ignore-scripts @deepseek-ai/dsh-tools@0.2.1-alpha.2 @deepseek-ai/dsh-skill@0.2.1-alpha.2
 node scripts/host-smoke.mjs .compat/alpha
 ```
 
-Not established by the local run:
+- Syntax, all 14 tool schemas, bundle identity, Swift source and binary hashes.
+- 19 deterministic tests: persistent app/variable bindings, batched actions
+  without forced observations, reusable compatibility IDs after UI changes,
+  absence of approval/password/scope gates, image mapping and host resizing,
+  real PNG resizing, adapter payloads and process cancellation.
+- REPL tests exercise a rejected await and continued variable use, nested real
+  image blocks, and host cancellation of an infinite JS loop followed by a
+  fresh worker. Node's REPL runtime-error path is covered explicitly.
+- Real Cordis, DSH ToolRuntime and Skills on rc.2 and alpha.2: actual plugin
+  load/unload, all 14 schemas and JavaScript/image dispatch. No approval service
+  is provided to the plugin in this test.
+- Dedicated Windows WinForms fixture: window discovery/capture, image budget,
+  semantic Unicode write/readback, button effect, password test-control write,
+  reusable observations after external UI changes, and persistent JS batching.
+  Foreground mouse/keyboard readback is tested locally; hosted CI skips that
+  interactive-desktop-dependent portion.
+- Hosted macOS rebuild of the modified Swift helper for arm64 and x86_64,
+  followed by ad-hoc signing and generated source/binary manifest. The rebuilt
+  helper and manifest are retained as a CI artifact for release packaging.
 
-- Native macOS GUI behavior, permissions and cursor routing on actual hardware.
-- Actual cua-driver sessions, its virtual cursor, Linux desktop compatibility.
-- Windows OCR availability across language packs, WGC availability and all third-party UI stacks.
-- A live model conversation, provider-side image preprocessing, multi-monitor
-  hardware behavior or all foreground mouse/keyboard actions. Negative monitor
-  origins and attachment normalization are covered by deterministic tests.
-- Permission-dependent macOS GUI verification. The successful macOS source
-  build and host contract jobs are separate from native GUI verification.
+## Installation and previous validation
 
-Limits are deliberate: dispatched input is not proof of task completion. UIA/AX
-cannot observe every visual, transient, remote or external change. A selected
-window capture can be flagged `occludedPossible`. Windows foreground input uses
-the real cursor. Review README and SECURITY before unattended use.
+The 0.1.0 baseline was installed through the real DSH CLI into isolated Web and
+Headless profiles. A public Git install into another Headless profile succeeded,
+and composed config/schema included the plugin. Shared SDK peers are supplied by
+DSH's installation resolver; pnpm can report missing profile-local peers without
+preventing DSH schema loading. User profiles and model credentials were not modified.
+
+[Initial 0.1.0 CI](https://github.com/cqupi/dsh-computer-use-fusion/actions/runs/38029512724)
+passed all seven jobs. Current validation runs are available under
+[Actions](https://github.com/cqupi/dsh-computer-use-fusion/actions).
+
+## Scope not established
+
+- Actual macOS GUI execution, system permissions and cursor behavior on hardware.
+- Actual cua-driver/virtual-cursor sessions or Linux desktop GUI behavior.
+- Windows OCR language packs, every capture API and third-party UI framework.
+- A live model conversation, provider-side image transformations and every
+  multi-monitor/foreground input combination.
+
+UIA/AX reports and dispatched OS input are evidence to inspect, rather than a
+guarantee that an application completed a larger task. The plugin returns
+backend facts, observation errors and possible capture occlusion explicitly.

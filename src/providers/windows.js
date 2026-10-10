@@ -26,8 +26,8 @@ export class WindowsProvider {
       && (!selector.name || (w.name || w.title || '').toLowerCase().includes(selector.name.toLowerCase())));
     let w;
     if (selector.pid || selector.windowId || selector.name) {
-      if (candidates.length !== 1) throw new Error(`AMBIGUOUS_OR_MISSING_WINDOW: ${candidates.length}; supply windowId from fusion_list_windows`);
-      w = candidates[0];
+      w = candidates.find(item => item.hasKeyboardFocus) ?? candidates[0];
+      if (!w) throw new Error('WINDOW_NOT_FOUND');
     } else {
       const active = (await this.health(signal)).activeWindow;
       w = windows.find(item => String(item.nativeWindowHandle) === String(active.nativeWindowHandle));
@@ -69,27 +69,25 @@ export class WindowsProvider {
     return { target, elements, frame: raw.tree.boundingBox, truncated: raw.truncated, screenshot: shot };
   }
   async act(target, action, element, signal) {
-    const args = { ...this.selector(target), activate: action.foreground === true };
+    const foreground = action.foreground !== false;
+    const args = { ...this.selector(target), activate: foreground };
     if (element) args.elementId = element.ref;
     if (action.point) Object.assign(args, action.point);
     switch (action.kind) {
       case 'click': return this.call(action.count === 2 ? 'double_click' : 'click', {
-        ...args, button: action.button ?? 'left', dispatch: action.foreground ? 'foreground' : 'background' }, signal);
+        ...args, button: action.button ?? 'left', dispatch: foreground ? 'foreground' : 'background' }, signal);
       case 'type': return this.call('type_text', { ...args, text: action.text,
-        method: action.foreground ? 'sendinput' : 'background', restoreClipboard: true }, signal);
+        method: foreground ? 'sendinput' : 'background', restoreClipboard: true }, signal);
       case 'key':
-        if (!action.foreground) throw new Error('KEY_REQUIRES_FOREGROUND: set foreground=true for explicit activation');
-        return this.call('keypress', { ...args, keys: action.keys }, signal);
-      case 'set_value': return this.call('set_value', { ...args, value: action.text, fallbackType: false }, signal);
-      case 'invoke': return this.call('invoke', { ...args, fallbackClick: false }, signal);
+        return this.call('keypress', { ...args, activate: true, keys: action.keys }, signal);
+      case 'set_value': return this.call('set_value', { ...args, value: action.text, fallbackType: true }, signal);
+      case 'invoke': return this.call('invoke', { ...args, fallbackClick: true }, signal);
       case 'scroll':
-        if (!action.foreground) throw new Error('SCROLL_REQUIRES_FOREGROUND');
-        return this.call('scroll', { ...args,
+        return this.call('scroll', { ...args, activate: true,
           deltaY: ['up', 'down'].includes(action.direction) ? (action.direction === 'down' ? 1 : -1) * 120 * (action.amount ?? 3) : 0,
           deltaX: ['left', 'right'].includes(action.direction) ? (action.direction === 'right' ? 1 : -1) * 120 * (action.amount ?? 3) : 0 }, signal);
       case 'drag':
-        if (!action.foreground) throw new Error('DRAG_REQUIRES_FOREGROUND');
-        return this.call('drag', { ...args, path: [action.point, action.to], durationMs: 500 }, signal);
+        return this.call('drag', { ...args, activate: true, path: [action.point, action.to], durationMs: 500 }, signal);
       case 'activate': return this.call('activate_window', { ...args, activate: true }, signal);
       default: throw new Error('UNSUPPORTED_ACTION');
     }
