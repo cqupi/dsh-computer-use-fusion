@@ -17,8 +17,10 @@ used without modifying the user's system installation.
 | DSH 0.2.0-rc.2 host contract | Real Cordis, ToolRuntime and Skill service. Registered and dispatched tools with canonical output validation; actual plugin load/unload; image attachment rendering. |
 | DSH 0.2.1-alpha.2 host contract | Same contract against separately installed published alpha tools/skill packages. This is not an alpha full-profile/model E2E test. |
 | DSH CLI 0.2.0-rc.2 profile integration | Installed local plugin through `dsh plugin` into isolated Web and Headless profiles. Both composed `--dump-config` outputs include the Fusion bundle and config. User profiles were not modified. |
+| Public Git installation | Installed `git+https://github.com/cqupi/dsh-computer-use-fusion.git` through the real DSH CLI into a separate Headless profile. Composed config and `--dump-config-schema` succeed and include Fusion's config schema. pnpm reports absent profile-local SDK peers because this profile uses the installation's shared SDK; DSH's runtime resolver successfully imports the plugin. |
 | Native Windows fixture | A separate WinForms process: exact HWND/PID discovery, window capture/downscale, Unicode semantic value write and UIA readback, background invoke and observed status change, password rejection and externally changed-state rejection. Only this process was operated and closed. |
 | Package contents | `npm pack`; sources, native providers, licenses, skills and bundle patch included; upstream checkouts, host sandboxes, screenshots and local paths excluded. |
+| Hosted CI | [Initial source validation](https://github.com/cqupi/dsh-computer-use-fusion/actions/runs/38029512724) passed all seven jobs: Windows/macOS/Linux host contracts for both DSH versions, Windows native fixture, and universal macOS helper source rebuild. This does not establish macOS GUI behavior. |
 
 Reproduce the local core/host/native checks:
 
@@ -41,9 +43,8 @@ Not established by the local run:
 - A live model conversation, provider-side image preprocessing, multi-monitor
   hardware behavior or all foreground mouse/keyboard actions. Negative monitor
   origins and attachment normalization are covered by deterministic tests.
-- All GitHub Actions jobs passing; the workflow is supplied to repeat checks on
-  hosted Windows/macOS/Linux runners. The macOS source build job is separate
-  from permission-dependent native GUI verification.
+- Permission-dependent macOS GUI verification. The successful macOS source
+  build and host contract jobs are separate from native GUI verification.
 
 Limits are deliberate: dispatched input is not proof of task completion. UIA/AX
 cannot observe every visual, transient, remote or external change. A selected
